@@ -1201,9 +1201,9 @@ function BracketPreviewModal({ entry, onClose }: { entry: ViewableLeaderboardEnt
   const selectedKnockouts = Object.entries(picks.knockoutPicks).filter(([, teamId]) => Boolean(teamId));
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-black/70 px-4 py-6 backdrop-blur-sm">
-      <div className="mx-auto max-w-5xl rounded-lg border border-white/15 bg-stone-50 p-4 shadow-2xl">
-        <div className="flex flex-wrap items-start justify-between gap-3 border-b border-stone-200 pb-3">
+    <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm">
+      <div className="flex h-dvh w-full flex-col overflow-hidden bg-stone-50 shadow-2xl">
+        <div className="sticky top-0 z-10 flex flex-wrap items-start justify-between gap-3 border-b border-stone-200 bg-stone-50 px-4 py-4">
           <div>
             <p className="text-xs font-black uppercase tracking-wide text-emerald-800">Public bracket</p>
             <h2 className="mt-1 text-2xl font-black">{entry.displayName}</h2>
@@ -1216,7 +1216,7 @@ function BracketPreviewModal({ entry, onClose }: { entry: ViewableLeaderboardEnt
           </button>
         </div>
 
-        <div className="mt-4 grid gap-4 lg:grid-cols-2">
+        <div className="grid flex-1 gap-4 overflow-y-auto px-4 py-4 lg:grid-cols-2">
           <div>
             <h3 className="text-sm font-black uppercase tracking-wide text-stone-500">Group picks</h3>
             <div className="mt-3 grid gap-2 sm:grid-cols-2">
