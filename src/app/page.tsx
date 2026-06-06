@@ -46,6 +46,15 @@ function teamText(team?: Team) {
   return `${team.flag.startsWith("code:") ? team.flag.replace("code:", "") : team.flag} ${team.name}`;
 }
 
+function displayChampionPick(championPick: string | null, picks: unknown) {
+  const savedChampion =
+    picks && typeof picks === "object" && "knockoutPicks" in picks
+      ? (picks as BracketDraft).knockoutPicks?.m104
+      : undefined;
+  const teamId = savedChampion || championPick || "";
+  return teamById.get(teamId)?.name ?? teamId;
+}
+
 function pct(value: number) {
   return `${value}%`;
 }
@@ -259,7 +268,7 @@ function Header({ activeTab, setActiveTab }: { activeTab: TabId; setActiveTab: (
             </div>
           </div>
           <div className="grid gap-2 text-sm sm:grid-cols-3">
-            <Badge label="Amaan's winner" value={teamText(champion)} />
+            <Badge label="Amaan's AI winner" value={teamText(champion)} />
             <Badge label="Bracket deadline" value={new Date(deadlineIso).toLocaleDateString()} />
             <Badge label="Data updated" value={new Date(dataUpdatedIso).toLocaleString()} />
           </div>
@@ -595,7 +604,7 @@ function BracketPool({ onSubmitted }: { onSubmitted: (entry: LeaderboardEntry) =
       <div ref={bracketRef} className="rounded-lg border border-stone-200 bg-white p-4 shadow-sm">
         <div className="flex flex-wrap items-center justify-between gap-2 border-b border-stone-100 pb-3">
           <div>
-            <p className="text-sm font-bold text-stone-500">Amaan&apos;s winner</p>
+            <p className="text-sm font-bold text-stone-500">Amaan&apos;s AI winner</p>
             <h3 className="text-xl font-black">
               <TeamLabel team={teamById.get(amaanWinnerId) ?? modelChampion(teams)} />
             </h3>
@@ -929,7 +938,7 @@ function Leaderboard({ localEntry }: { localEntry: LeaderboardEntry | null }) {
     if (!supabase) return;
     supabase
       .from("brackets")
-      .select("display_name, champion_pick, submitted_at")
+      .select("display_name, champion_pick, picks, submitted_at")
       .order("submitted_at", { ascending: true })
       .then(({ data, error }) => {
         if (error) {
@@ -942,7 +951,7 @@ function Leaderboard({ localEntry }: { localEntry: LeaderboardEntry | null }) {
             rank: index + 1,
             displayName: row.display_name,
             points: 0,
-            championPick: teamById.get(row.champion_pick)?.name ?? row.champion_pick,
+            championPick: displayChampionPick(row.champion_pick, row.picks),
           })),
         );
       });
