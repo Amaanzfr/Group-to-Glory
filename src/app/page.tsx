@@ -796,36 +796,36 @@ function BracketGraphic({
         <p className="mb-3 text-xs font-bold text-stone-500 md:hidden">Swipe left for Round of 16, quarters, semis, and final.</p>
         <div className="bracket-scroll pb-3">
           <div className="bracket-track">
-          {advancedMatches.map((column) => (
-            <div key={column.label} className="bracket-column">
-              <p className="mb-3 text-center text-xs font-black uppercase tracking-wide text-stone-500">{column.label}</p>
-              <div className="flex h-full flex-col justify-around gap-3">
-                {column.matches.map((match) => (
-                  <div key={match.id} className="bracket-match relative rounded-md border border-stone-200 bg-white p-2">
-                    <p className="mb-2 text-[10px] font-black uppercase tracking-wide text-stone-500">{match.label}</p>
-                    <p className="mb-2 text-[10px] font-bold text-stone-500">{match.date} · {match.venue}</p>
-                    {presentTeams(match.home, match.away).length ? (
-                      presentTeams(match.home, match.away).map((team) => (
-                        <button
-                          key={team.id}
-                          type="button"
-                          onClick={() => pickWinner(match.id, team.id)}
-                          className={`mb-1 flex h-9 w-full items-center justify-between rounded-sm border px-2 text-left text-xs font-black ${
-                            draft.knockoutPicks[match.id] === team.id ? "border-emerald-700 bg-emerald-50 text-emerald-900" : "border-stone-200 bg-stone-50"
-                          }`}
-                        >
-                          <TeamLabel team={team} />
-                        </button>
-                      ))
-                    ) : (
-                      <p className="rounded-sm border border-stone-200 bg-stone-50 px-2 py-2 text-xs font-bold text-stone-500">Waiting on feeder matches</p>
-                    )}
-                  </div>
-                ))}
+            {advancedMatches.map((column) => (
+              <div key={column.label} className="bracket-column">
+                <p className="mb-3 text-center text-xs font-black uppercase tracking-wide text-stone-500">{column.label}</p>
+                <div className="flex h-full flex-col justify-around gap-3">
+                  {column.matches.map((match) => (
+                    <div key={match.id} className="bracket-match relative rounded-md border border-stone-200 bg-white p-2">
+                      <p className="mb-2 text-[10px] font-black uppercase tracking-wide text-stone-500">{match.label}</p>
+                      <p className="mb-2 text-[10px] font-bold text-stone-500">{match.date} · {match.venue}</p>
+                      {presentTeams(match.home, match.away).length ? (
+                        presentTeams(match.home, match.away).map((team) => (
+                          <button
+                            key={team.id}
+                            type="button"
+                            onClick={() => pickWinner(match.id, team.id)}
+                            className={`mb-1 flex h-9 w-full items-center justify-between rounded-sm border px-2 text-left text-xs font-black ${
+                              draft.knockoutPicks[match.id] === team.id ? "border-emerald-700 bg-emerald-50 text-emerald-900" : "border-stone-200 bg-stone-50"
+                            }`}
+                          >
+                            <TeamLabel team={team} />
+                          </button>
+                        ))
+                      ) : (
+                        <p className="rounded-sm border border-stone-200 bg-stone-50 px-2 py-2 text-xs font-bold text-stone-500">Waiting on feeder matches</p>
+                      )}
+                    </div>
+                  ))}
+                </div>
               </div>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
         </div>
       </div>
     </div>

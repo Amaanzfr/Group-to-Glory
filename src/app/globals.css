@@ -18,6 +18,13 @@
   box-sizing: border-box;
 }
 
+html,
+body {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
 body {
   margin: 0;
   background:
@@ -159,6 +166,7 @@ button:disabled {
 
 .bracket-scroll {
   width: 100%;
+  max-width: 100%;
   overflow-x: auto;
   overscroll-behavior-x: contain;
   scroll-snap-type: x mandatory;
@@ -168,17 +176,19 @@ button:disabled {
 }
 
 .bracket-track {
-  display: grid;
-  grid-auto-flow: column;
-  grid-auto-columns: minmax(280px, 84vw);
+  display: flex;
   gap: 1rem;
   width: max-content;
-  min-width: 100%;
+  min-width: 0;
 }
 
 .bracket-column {
   position: relative;
+  flex: 0 0 calc(100vw - 3rem);
+  max-width: calc(100vw - 3rem);
+  min-width: 0;
   scroll-snap-align: start;
+  scroll-snap-stop: always;
 }
 
 .bracket-column:not(:last-child) .bracket-match::after {
@@ -246,10 +256,36 @@ button:disabled {
   }
 
   .bracket-track {
+    display: grid;
     grid-auto-flow: initial;
     grid-auto-columns: initial;
     grid-template-columns: 1.25fr 1.25fr 0.9fr 0.9fr 0.9fr;
     min-width: 980px;
     width: auto;
+  }
+
+  .bracket-column {
+    flex: initial;
+    max-width: none;
+  }
+}
+
+@media (max-width: 767px) {
+  .bracket-scroll {
+    margin-inline: -0.25rem;
+    padding-inline: 0.25rem;
+  }
+
+  .bracket-track {
+    padding-right: 0.75rem;
+  }
+
+  .bracket-column:not(:last-child)::after {
+    right: -0.55rem;
+  }
+
+  .bracket-column:not(:last-child) .bracket-match::after {
+    right: -0.75rem;
+    width: 0.75rem;
   }
 }
