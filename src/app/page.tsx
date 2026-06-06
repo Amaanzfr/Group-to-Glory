@@ -68,16 +68,16 @@ function TeamLabel({ team }: { team?: Team }) {
   if (!team) return <span className="text-stone-400">TBD</span>;
   if (team.flag.startsWith("code:")) {
     return (
-      <span className="inline-flex items-center gap-2">
+      <span className="inline-flex min-w-0 items-center gap-2">
         <span className="rounded-sm border border-stone-200 bg-stone-100 px-1.5 py-0.5 text-[10px] font-black tracking-wide">{team.flag.replace("code:", "")}</span>
-        <span>{team.name}</span>
+        <span className="min-w-0 break-words">{team.name}</span>
       </span>
     );
   }
   return (
-    <span className="inline-flex items-center gap-2">
+    <span className="inline-flex min-w-0 items-center gap-2">
       <span className="flag">{team.flag}</span>
-      <span>{team.name}</span>
+      <span className="min-w-0 break-words">{team.name}</span>
     </span>
   );
 }
@@ -1204,8 +1204,8 @@ function BracketPreviewPage({ entry, onBack }: { entry: ViewableLeaderboardEntry
   const selectedKnockouts = Object.entries(picks.knockoutPicks).filter(([, teamId]) => Boolean(teamId));
 
   return (
-    <section className="relative left-1/2 w-screen -translate-x-1/2 px-4">
-      <div className="rounded-none border-y border-stone-200 bg-stone-50 p-4 shadow-2xl sm:rounded-lg sm:border">
+    <section className="w-full overflow-hidden rounded-lg border border-stone-200 bg-stone-50 p-4 shadow-2xl">
+      <div className="w-full min-w-0">
         <div className="flex flex-wrap items-start justify-between gap-3 border-b border-stone-200 pb-4">
           <div>
             <p className="text-xs font-black uppercase tracking-wide text-emerald-800">Public bracket</p>
@@ -1219,14 +1219,14 @@ function BracketPreviewPage({ entry, onBack }: { entry: ViewableLeaderboardEntry
           </button>
         </div>
 
-        <div className="mt-4 grid gap-4 lg:grid-cols-2">
-          <div>
+        <div className="mt-4 grid min-w-0 gap-4 xl:grid-cols-2">
+          <div className="min-w-0">
             <h3 className="text-sm font-black uppercase tracking-wide text-stone-500">Group picks</h3>
-            <div className="mt-3 grid gap-2 sm:grid-cols-2">
+            <div className="mt-3 grid min-w-0 gap-2 md:grid-cols-2">
               {groupIds.map((group) => {
                 const pick = picks.groupPicks[group];
                 return (
-                  <div key={group} className="rounded-md border border-stone-200 bg-white p-3">
+                  <div key={group} className="min-w-0 rounded-md border border-stone-200 bg-white p-3">
                     <p className="mb-2 text-xs font-black uppercase tracking-wide text-stone-500">Group {group}</p>
                     {(["first", "second", "third", "fourth"] as const).map((slot, index) => (
                       <p key={slot} className="text-sm font-bold">
@@ -1239,11 +1239,11 @@ function BracketPreviewPage({ entry, onBack }: { entry: ViewableLeaderboardEntry
             </div>
           </div>
 
-          <div>
+          <div className="min-w-0">
             <h3 className="text-sm font-black uppercase tracking-wide text-stone-500">Knockout winners</h3>
-            <div className="mt-3 grid gap-2 sm:grid-cols-2">
+            <div className="mt-3 grid min-w-0 gap-2 md:grid-cols-2">
               {selectedKnockouts.map(([matchId, teamId]) => (
-                <div key={matchId} className="rounded-md border border-stone-200 bg-white p-3">
+                <div key={matchId} className="min-w-0 rounded-md border border-stone-200 bg-white p-3">
                   <p className="text-xs font-black uppercase tracking-wide text-stone-500">{matchId.replace("m", "Match ")}</p>
                   <p className="mt-1 text-sm font-bold"><TeamLabel team={teamById.get(teamId)} /></p>
                 </div>
