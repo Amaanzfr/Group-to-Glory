@@ -51,6 +51,11 @@ create policy "Users can submit one bracket"
   on public.brackets for insert
   with check (auth.uid() = user_id);
 
+create policy "Admin can correct own bracket"
+  on public.brackets for update
+  using (auth.uid() = user_id and lower(auth.jwt() ->> 'email') = 'amaanalizafar@gmail.com')
+  with check (auth.uid() = user_id and lower(auth.jwt() ->> 'email') = 'amaanalizafar@gmail.com');
+
 create policy "Profiles are readable"
   on public.profiles for select
   using (true);

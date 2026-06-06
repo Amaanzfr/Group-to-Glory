@@ -36,6 +36,7 @@ type ViewableLeaderboardEntry = LeaderboardEntry & {
 
 const teamById = new Map(teams.map((team) => [team.id, team]));
 const draftStorageKey = "group-to-glory-draft-v2";
+const adminEmail = (process.env.NEXT_PUBLIC_ADMIN_EMAIL || "amaanalizafar@gmail.com").toLowerCase();
 
 function supabaseSetupMessage() {
   const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
@@ -323,6 +324,7 @@ function BracketPool({ onSubmitted }: { onSubmitted: (entry: LeaderboardEntry) =
   const [finalScoreText, setFinalScoreText] = useState(() => (draft.finalScore ? draft.finalScore.join("-") : ""));
   const [submitted, setSubmitted] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [correctionMode, setCorrectionMode] = useState(false);
   const [signedIn, setSignedIn] = useState(false);
   const [userLabel, setUserLabel] = useState("");
   const [submitStatus, setSubmitStatus] = useState("");
@@ -337,7 +339,8 @@ function BracketPool({ onSubmitted }: { onSubmitted: (entry: LeaderboardEntry) =
   const r32 = firstRoundMatches(draft, teams);
   const finalistIds = ["m101", "m102"].map((matchId) => draft.knockoutPicks[matchId]).filter(Boolean);
   const finalistScorers = finalistIds.flatMap((teamId) => squadCandidatesForTeamId(teamId));
-  const locked = submitted;
+  const isAdmin = userLabel.toLowerCase() === adminEmail;
+  const locked = submitted && !correctionMode;
   const googleAuthUrl =
     typeof window !== "undefined" && process.env.NEXT_PUBLIC_SUPABASE_URL
       ? `${process.env.NEXT_PUBLIC_SUPABASE_URL}/auth/v1/authorize?${new URLSearchParams({
@@ -574,8 +577,63 @@ function BracketPool({ onSubmitted }: { onSubmitted: (entry: LeaderboardEntry) =
     await supabase.auth.signOut();
     setSignedIn(false);
     setUserLabel("");
+    setCorrectionMode(false);
+    setSubmitted(false);
     setSubmitStatus("Signed out.");
     setAuthNote("Login required for official submit and PNG download.");
+  };
+
+  const saveCorrection = async () => {
+    setSubmitStatus("");
+    if (!isAdmin) {
+      setSubmitStatus("Only the admin account can override a submitted bracket.");
+      return;
+    }
+    if (!canBuildBracket(draft) || !draftChampion(draft) || !draft.finalScorer || !draft.finalScore) {
+      setSubmitStatus("Finish the corrected bracket, final scorer, and final score before saving.");
+      return;
+    }
+    if (!window.confirm("This will overwrite your saved official bracket only. Continue?")) return;
+    const supabase = createSupabaseBrowserClient();
+    if (!supabase) {
+      setAuthNote(supabaseSetupMessage());
+      return;
+    }
+    const { data } = await supabase.auth.getUser();
+    if (!data.user) {
+      await signIn();
+      return;
+    }
+    const championPick = draftChampion(draft) ?? "";
+    setSubmitting(true);
+    try {
+      const { error } = await supabase
+        .from("brackets")
+        .update({
+          picks: draft,
+          champion_pick: championPick,
+          final_goalscorer_pick: draft.finalScorer,
+          final_score: draft.finalScore.join("-"),
+        })
+        .eq("user_id", data.user.id);
+
+      if (error) {
+        setSubmitStatus(`${error.message}. If this mentions policy/RLS, run the admin correction SQL I gave you.`);
+        return;
+      }
+      window.localStorage.setItem(draftStorageKey, JSON.stringify(draft));
+      setCorrectionMode(false);
+      setSubmitted(true);
+      setSubmitStatus("Your official bracket was corrected and locked.");
+      onSubmitted({
+        rank: 1,
+        displayName: data.user.user_metadata?.full_name || data.user.email?.split("@")[0] || "Player",
+        points: 0,
+        championPick: teamById.get(championPick)?.name ?? championPick,
+      });
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -611,6 +669,18 @@ function BracketPool({ onSubmitted }: { onSubmitted: (entry: LeaderboardEntry) =
               {submitted ? <Check className="h-4 w-4" /> : <Lock className="h-4 w-4" />}
               {submitted ? "Bracket locked" : submitting ? "Submitting" : "Submit official bracket"}
             </button>
+            {submitted && isAdmin ? (
+              <button
+                type="button"
+                onClick={() => {
+                  setCorrectionMode((current) => !current);
+                  setSubmitStatus(correctionMode ? "Correction mode cancelled. Bracket locked." : "Admin correction mode on. Edit your bracket, then save correction at the bottom.");
+                }}
+                className="inline-flex h-10 items-center gap-2 rounded-md border border-amber-300 bg-white px-3 text-sm font-bold"
+              >
+                {correctionMode ? "Cancel correction" : "Admin correction"}
+              </button>
+            ) : null}
           </div>
         </div>
         <p className="mt-3 text-xs font-semibold text-stone-500">{authNote}</p>
@@ -624,6 +694,8 @@ function BracketPool({ onSubmitted }: { onSubmitted: (entry: LeaderboardEntry) =
             ) : null}
           </div>
         ) : null}
+        {submitted && locked ? <p className="mt-3 rounded-md bg-emerald-50 px-3 py-2 text-sm font-black text-emerald-900">This official bracket is locked.</p> : null}
+        {correctionMode ? <p className="mt-3 rounded-md bg-amber-50 px-3 py-2 text-sm font-black text-amber-900">Admin correction mode is active. This only affects your saved bracket.</p> : null}
       </div>
 
       <div ref={bracketRef} className="rounded-lg border border-stone-200 bg-white p-4 shadow-sm">
@@ -751,12 +823,12 @@ function BracketPool({ onSubmitted }: { onSubmitted: (entry: LeaderboardEntry) =
             <span className="text-xs font-bold uppercase tracking-wide text-stone-500">Lock bracket</span>
             <button
               type="button"
-              onClick={submit}
-              disabled={submitted || submitting}
+              onClick={correctionMode ? saveCorrection : submit}
+              disabled={(submitted && !correctionMode) || submitting}
               className="mt-2 inline-flex h-10 w-full items-center justify-center gap-2 rounded-md bg-emerald-400 px-3 text-sm font-black text-emerald-950 disabled:cursor-not-allowed disabled:bg-stone-300"
             >
               {submitted ? <Check className="h-4 w-4" /> : <Lock className="h-4 w-4" />}
-              {submitted ? "Locked" : submitting ? "Submitting" : "Submit"}
+              {correctionMode ? "Save correction" : submitted ? "Locked" : submitting ? "Submitting" : "Submit"}
             </button>
           </div>
         </div>
