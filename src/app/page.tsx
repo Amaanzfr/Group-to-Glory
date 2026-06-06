@@ -33,6 +33,12 @@ type ViewableLeaderboardEntry = LeaderboardEntry & {
   picks?: BracketDraft | null;
   submittedAt?: string;
 };
+type LeaderboardRow = {
+  display_name: string;
+  champion_pick: string;
+  picks?: BracketDraft | null;
+  submitted_at: string;
+};
 
 const teamById = new Map(teams.map((team) => [team.id, team]));
 const draftStorageKey = "group-to-glory-draft-v2";
@@ -58,6 +64,16 @@ function displayChampionPick(championPick: string | null, picks: unknown) {
       : undefined;
   const teamId = savedChampion || championPick || "";
   return teamById.get(teamId)?.name ?? teamId;
+}
+
+function championTeamFromPick(championPick: string) {
+  return teams.find((team) => team.id === championPick || team.name === championPick);
+}
+
+function championFlag(championPick: string) {
+  const team = championTeamFromPick(championPick);
+  if (!team) return championPick || "TBD";
+  return team.flag.startsWith("code:") ? team.flag.replace("code:", "") : team.flag;
 }
 
 function pct(value: number) {
@@ -1092,6 +1108,7 @@ function ModelPerformance() {
 function Leaderboard({ localEntry }: { localEntry: LeaderboardEntry | null }) {
   const [remoteEntries, setRemoteEntries] = useState<ViewableLeaderboardEntry[] | null>(null);
   const [selectedEntry, setSelectedEntry] = useState<ViewableLeaderboardEntry | null>(null);
+  const [viewerCanOpenBrackets, setViewerCanOpenBrackets] = useState(false);
   const [personalDisplayName, setPersonalDisplayName] = useState("");
   const [personalChampionPick] = useState(() => {
     if (typeof window === "undefined") return "";
@@ -1118,32 +1135,49 @@ function Leaderboard({ localEntry }: { localEntry: LeaderboardEntry | null }) {
   useEffect(() => {
     const supabase = createSupabaseBrowserClient();
     if (!supabase) return;
-    supabase.auth.getUser().then(({ data }) => {
-      if (data.user) {
-        setPersonalDisplayName(data.user.user_metadata?.full_name || data.user.email?.split("@")[0] || "Player");
+    const loadLeaderboard = async () => {
+      const { data: userData } = await supabase.auth.getUser();
+      let canOpenBrackets = false;
+      if (userData.user) {
+        setPersonalDisplayName(userData.user.user_metadata?.full_name || userData.user.email?.split("@")[0] || "Player");
+        const { data: ownBracket } = await supabase
+          .from("brackets")
+          .select("id")
+          .eq("user_id", userData.user.id)
+          .maybeSingle();
+        canOpenBrackets = Boolean(ownBracket);
+        setViewerCanOpenBrackets(canOpenBrackets);
       }
-    });
-    supabase
-      .from("brackets")
-      .select("display_name, champion_pick, picks, submitted_at")
-      .order("submitted_at", { ascending: true })
-      .then(({ data, error }) => {
-        if (error) {
-          setStatus("Leaderboard is showing local/demo entries. Add public read policy for brackets to show everyone.");
-          return;
-        }
-        if (!data?.length) return;
-        setRemoteEntries(
-          data.map((row, index) => ({
+
+      const result = canOpenBrackets
+        ? await supabase.from("brackets").select("display_name, champion_pick, picks, submitted_at").order("submitted_at", { ascending: true })
+        : await supabase.from("brackets").select("display_name, champion_pick, submitted_at").order("submitted_at", { ascending: true });
+      const data = result.data as LeaderboardRow[] | null;
+      const error = result.error;
+
+      if (error) {
+        setStatus("Leaderboard is showing local/demo entries. Add public read policy for brackets to show everyone.");
+        return;
+      }
+      if (!data?.length) return;
+      setRemoteEntries(
+        data.map((row, index) => {
+          const maybePicks = "picks" in row ? (row.picks as BracketDraft) : null;
+          return {
             rank: index + 1,
             displayName: row.display_name,
             points: 0,
-            championPick: displayChampionPick(row.champion_pick, row.picks),
-            picks: row.picks as BracketDraft,
+            championPick: displayChampionPick(row.champion_pick, maybePicks),
+            picks: canOpenBrackets ? maybePicks : null,
             submittedAt: row.submitted_at,
-          })),
-        );
-      });
+          };
+        }),
+      );
+      if (!canOpenBrackets) {
+        setStatus("Submit your own official bracket to unlock public bracket previews.");
+      }
+    };
+    loadLeaderboard();
   }, []);
 
   if (selectedEntry?.picks) {
@@ -1180,13 +1214,13 @@ function Leaderboard({ localEntry }: { localEntry: LeaderboardEntry | null }) {
               return (
                 <tr
                   key={`${entry.displayName}-${index}`}
-                  onClick={() => viewableEntry.picks && setSelectedEntry(viewableEntry)}
-                  className={`border-t border-stone-200 ${viewableEntry.picks ? "cursor-pointer transition hover:bg-white/10" : ""}`}
+                  onClick={() => viewerCanOpenBrackets && viewableEntry.picks && setSelectedEntry(viewableEntry)}
+                  className={`border-t border-stone-200 ${viewerCanOpenBrackets && viewableEntry.picks ? "cursor-pointer transition hover:bg-white/10" : ""}`}
                 >
                   <td className="p-3 font-black">{index + 1}</td>
                   <td className="p-3 font-bold">{entry.displayName}</td>
                   <td className="p-3">{entry.points}</td>
-                  <td className="p-3 text-right font-bold">{entry.championPick}</td>
+                  <td className="p-3 text-right text-xl font-bold" title={entry.championPick}>{championFlag(entry.championPick)}</td>
                 </tr>
               );
             })}
