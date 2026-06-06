@@ -254,67 +254,6 @@ button:disabled {
   background: linear-gradient(180deg, rgba(30, 213, 139, 0.85), rgba(245, 196, 81, 0.72));
 }
 
-.bracket-preview-overlay {
-  position: fixed;
-  inset: 0;
-  z-index: 9999;
-  width: 100vw;
-  height: 100vh;
-  height: 100dvh;
-  overflow: hidden;
-  background: rgba(0, 0, 0, 0.72);
-  backdrop-filter: blur(10px);
-}
-
-.bracket-preview-panel {
-  position: fixed;
-  inset: 0;
-  display: flex;
-  width: 100vw;
-  height: 100vh;
-  height: 100dvh;
-  max-width: none;
-  max-height: none;
-  flex-direction: column;
-  overflow: hidden;
-  border: 0;
-  border-radius: 0;
-  background: linear-gradient(180deg, rgba(10, 24, 22, 0.98), rgba(4, 12, 10, 0.98));
-  color: var(--foreground);
-}
-
-.bracket-preview-header {
-  position: sticky;
-  top: 0;
-  z-index: 1;
-  display: flex;
-  flex: 0 0 auto;
-  flex-wrap: wrap;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 0.75rem;
-  border-bottom: 1px solid var(--line);
-  background: rgba(10, 24, 22, 0.98);
-  padding: 1rem;
-}
-
-.bracket-preview-body {
-  display: grid;
-  min-height: 0;
-  flex: 1 1 auto;
-  gap: 1rem;
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  padding: 1rem;
-  -webkit-overflow-scrolling: touch;
-}
-
-@media (min-width: 1024px) {
-  .bracket-preview-body {
-    grid-template-columns: 1fr 1fr;
-  }
-}
-
 .celebration-card {
   background:
     radial-gradient(circle at 18% 0%, rgba(30, 213, 139, 0.34), transparent 18rem),
