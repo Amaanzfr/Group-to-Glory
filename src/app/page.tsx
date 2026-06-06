@@ -792,9 +792,10 @@ function BracketGraphic({
         </div>
         <p className="rounded-md bg-stone-100 px-3 py-2 text-xs font-bold text-stone-500">Pick winners from left to right</p>
       </div>
-        <div className="mt-5 overflow-x-auto pb-2">
-          <p className="mb-3 text-xs font-bold text-stone-500 sm:hidden">Swipe sideways to finish the bracket path.</p>
-          <div className="grid min-w-[980px] grid-cols-[1.25fr_1.25fr_0.9fr_0.9fr_0.9fr] gap-4">
+      <div className="mt-5">
+        <p className="mb-3 text-xs font-bold text-stone-500 md:hidden">Swipe left for Round of 16, quarters, semis, and final.</p>
+        <div className="bracket-scroll pb-3">
+          <div className="bracket-track">
           {advancedMatches.map((column) => (
             <div key={column.label} className="bracket-column">
               <p className="mb-3 text-center text-xs font-black uppercase tracking-wide text-stone-500">{column.label}</p>
@@ -824,6 +825,7 @@ function BracketGraphic({
               </div>
             </div>
           ))}
+        </div>
         </div>
       </div>
     </div>

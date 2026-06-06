@@ -18,12 +18,6 @@
   box-sizing: border-box;
 }
 
-html,
-body {
-  max-width: 100%;
-  overflow-x: hidden;
-}
-
 body {
   margin: 0;
   background:
@@ -163,8 +157,28 @@ button:disabled {
   z-index: 1;
 }
 
-.bracket-grid {
-  grid-template-columns: repeat(5, minmax(170px, 1fr));
+.bracket-scroll {
+  width: 100%;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scroll-snap-type: x mandatory;
+  touch-action: pan-x pan-y;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-color: rgba(30, 213, 139, 0.65) rgba(255, 255, 255, 0.1);
+}
+
+.bracket-track {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(280px, 84vw);
+  gap: 1rem;
+  width: max-content;
+  min-width: 100%;
+}
+
+.bracket-column {
+  position: relative;
+  scroll-snap-align: start;
 }
 
 .bracket-column:not(:last-child) .bracket-match::after {
@@ -175,6 +189,16 @@ button:disabled {
   width: 1rem;
   height: 1px;
   background: linear-gradient(90deg, rgba(30, 213, 139, 0.85), rgba(245, 196, 81, 0.72));
+}
+
+.bracket-column:not(:last-child)::after {
+  content: "";
+  position: absolute;
+  top: 2rem;
+  right: -0.7rem;
+  bottom: 1rem;
+  width: 1px;
+  background: linear-gradient(180deg, rgba(30, 213, 139, 0.35), rgba(245, 196, 81, 0.22));
 }
 
 .bracket-match {
@@ -216,8 +240,16 @@ button:disabled {
   }
 }
 
-@media (max-width: 980px) {
-  .bracket-grid {
-    grid-template-columns: 1fr;
+@media (min-width: 768px) {
+  .bracket-scroll {
+    scroll-snap-type: none;
+  }
+
+  .bracket-track {
+    grid-auto-flow: initial;
+    grid-auto-columns: initial;
+    grid-template-columns: 1.25fr 1.25fr 0.9fr 0.9fr 0.9fr;
+    min-width: 980px;
+    width: auto;
   }
 }
