@@ -748,6 +748,7 @@ function BracketGraphic({
   matches: ReturnType<typeof firstRoundMatches>;
   pickWinner: (matchId: string, teamId: string) => void;
 }) {
+  const [mobileRoundIndex, setMobileRoundIndex] = useState(0);
   const teamFromPick = (matchId: string) => teamById.get(draft.knockoutPicks[matchId]);
   const presentTeams = (home?: Team, away?: Team) => [home, away].filter((team): team is Team => Boolean(team));
   const advancedMatches = [
@@ -791,6 +792,7 @@ function BracketGraphic({
       ],
     },
   ];
+  const mobileRound = advancedMatches[mobileRoundIndex] ?? advancedMatches[0];
 
   return (
     <div className="mt-8 rounded-lg border border-stone-200 bg-stone-50 p-4">
@@ -802,8 +804,66 @@ function BracketGraphic({
         <p className="rounded-md bg-stone-100 px-3 py-2 text-xs font-bold text-stone-500">Pick winners from left to right</p>
       </div>
       <div className="mt-5">
-        <p className="mb-3 text-xs font-bold text-stone-500 md:hidden">Swipe left for Round of 16, quarters, semis, and final.</p>
-        <div className="bracket-scroll pb-3">
+        <div className="mobile-bracket md:hidden">
+          <div className="mb-3 flex items-center justify-between gap-2">
+            <button
+              type="button"
+              disabled={mobileRoundIndex === 0}
+              onClick={() => setMobileRoundIndex((index) => Math.max(0, index - 1))}
+              className="h-9 rounded-md border border-stone-300 bg-white px-3 text-xs font-black disabled:opacity-35"
+            >
+              Prev
+            </button>
+            <div className="text-center">
+              <p className="text-[10px] font-black uppercase tracking-wide text-stone-500">Round {mobileRoundIndex + 1} of {advancedMatches.length}</p>
+              <p className="text-sm font-black">{mobileRound.label}</p>
+            </div>
+            <button
+              type="button"
+              disabled={mobileRoundIndex === advancedMatches.length - 1}
+              onClick={() => setMobileRoundIndex((index) => Math.min(advancedMatches.length - 1, index + 1))}
+              className="h-9 rounded-md border border-stone-300 bg-white px-3 text-xs font-black disabled:opacity-35"
+            >
+              Next
+            </button>
+          </div>
+          <div className="mb-3 grid grid-cols-5 gap-1">
+            {advancedMatches.map((column, index) => (
+              <button
+                key={column.label}
+                type="button"
+                onClick={() => setMobileRoundIndex(index)}
+                className={`h-2 rounded-full ${index === mobileRoundIndex ? "bg-emerald-400" : "bg-stone-100"}`}
+                aria-label={`Show ${column.label}`}
+              />
+            ))}
+          </div>
+          <div className="mobile-round-column">
+            {mobileRound.matches.map((match) => (
+              <div key={match.id} className="bracket-match mobile-bracket-match relative rounded-md border border-stone-200 bg-white p-2">
+                <p className="mb-2 text-[10px] font-black uppercase tracking-wide text-stone-500">{match.label}</p>
+                <p className="mb-2 text-[10px] font-bold text-stone-500">{match.date} · {match.venue}</p>
+                {presentTeams(match.home, match.away).length ? (
+                  presentTeams(match.home, match.away).map((team) => (
+                    <button
+                      key={team.id}
+                      type="button"
+                      onClick={() => pickWinner(match.id, team.id)}
+                      className={`mb-1 flex h-10 w-full min-w-0 items-center justify-between rounded-sm border px-2 text-left text-xs font-black ${
+                        draft.knockoutPicks[match.id] === team.id ? "border-emerald-700 bg-emerald-50 text-emerald-900" : "border-stone-200 bg-stone-50"
+                      }`}
+                    >
+                      <TeamLabel team={team} />
+                    </button>
+                  ))
+                ) : (
+                  <p className="rounded-sm border border-stone-200 bg-stone-50 px-2 py-2 text-xs font-bold text-stone-500">Waiting on feeder matches</p>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+        <div className="bracket-scroll hidden pb-3 md:block">
           <div className="bracket-track">
             {advancedMatches.map((column) => (
               <div key={column.label} className="bracket-column">
@@ -929,13 +989,37 @@ function ModelPerformance() {
 
 function Leaderboard({ localEntry }: { localEntry: LeaderboardEntry | null }) {
   const [remoteEntries, setRemoteEntries] = useState<LeaderboardEntry[] | null>(null);
+  const [personalDisplayName, setPersonalDisplayName] = useState("");
+  const [personalChampionPick] = useState(() => {
+    if (typeof window === "undefined") return "";
+    const saved = window.localStorage.getItem(draftStorageKey);
+    const savedDraft = saved ? (JSON.parse(saved) as BracketDraft) : null;
+    const savedChampion = savedDraft ? draftChampion(savedDraft) : undefined;
+    return savedChampion ? teamById.get(savedChampion)?.name ?? savedChampion : "";
+  });
   const [status, setStatus] = useState("");
   const baseEntries = remoteEntries ?? leaderboard;
   const entries = localEntry ? [localEntry, ...baseEntries.filter((entry) => entry.displayName !== localEntry.displayName)] : baseEntries;
+  const visibleEntries =
+    personalDisplayName && personalChampionPick
+      ? entries.map((entry) =>
+          entry.displayName === personalDisplayName
+            ? {
+                ...entry,
+                championPick: personalChampionPick,
+              }
+            : entry,
+        )
+      : entries;
 
   useEffect(() => {
     const supabase = createSupabaseBrowserClient();
     if (!supabase) return;
+    supabase.auth.getUser().then(({ data }) => {
+      if (data.user) {
+        setPersonalDisplayName(data.user.user_metadata?.full_name || data.user.email?.split("@")[0] || "Player");
+      }
+    });
     supabase
       .from("brackets")
       .select("display_name, champion_pick, picks, submitted_at")
@@ -982,7 +1066,7 @@ function Leaderboard({ localEntry }: { localEntry: LeaderboardEntry | null }) {
             </tr>
           </thead>
           <tbody>
-            {entries.map((entry, index) => (
+            {visibleEntries.map((entry, index) => (
               <tr key={`${entry.displayName}-${index}`} className="border-t border-stone-200">
                 <td className="p-3 font-black">{index + 1}</td>
                 <td className="p-3 font-bold">{entry.displayName}</td>

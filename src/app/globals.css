@@ -224,6 +224,36 @@ button:disabled {
   background: linear-gradient(180deg, var(--green), var(--gold));
 }
 
+.mobile-bracket {
+  width: 100%;
+  max-width: 100%;
+  overflow: hidden;
+}
+
+.mobile-round-column {
+  display: grid;
+  gap: 0.75rem;
+  width: 100%;
+  max-width: 100%;
+}
+
+.mobile-bracket-match {
+  width: 100%;
+  max-width: 100%;
+}
+
+.mobile-bracket-match:not(:last-child)::after {
+  content: "";
+  position: absolute;
+  left: 1rem;
+  right: auto;
+  top: auto;
+  bottom: -0.75rem;
+  width: 1px;
+  height: 0.75rem;
+  background: linear-gradient(180deg, rgba(30, 213, 139, 0.85), rgba(245, 196, 81, 0.72));
+}
+
 .celebration-card {
   background:
     radial-gradient(circle at 18% 0%, rgba(30, 213, 139, 0.34), transparent 18rem),
