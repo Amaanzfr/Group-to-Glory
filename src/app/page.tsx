@@ -29,6 +29,10 @@ const tabs = [
 ] as const;
 
 type TabId = (typeof tabs)[number]["id"];
+type ViewableLeaderboardEntry = LeaderboardEntry & {
+  picks?: BracketDraft | null;
+  submittedAt?: string;
+};
 
 const teamById = new Map(teams.map((team) => [team.id, team]));
 const draftStorageKey = "group-to-glory-draft-v2";
@@ -82,17 +86,20 @@ function SelectTeam({
   teams: options,
   onChange,
   placeholder = "Select team",
+  disabled = false,
 }: {
   value?: string;
   teams: Team[];
   onChange: (value: string) => void;
   placeholder?: string;
+  disabled?: boolean;
 }) {
   return (
     <label className="relative block">
       <select
         value={value ?? ""}
         onChange={(event) => onChange(event.target.value)}
+        disabled={disabled}
         className="h-10 w-full appearance-none rounded-md border border-stone-300 bg-white px-3 pr-9 text-sm outline-none transition focus:border-emerald-700 focus:ring-2 focus:ring-emerald-100"
       >
         <option value="">{placeholder}</option>
@@ -330,6 +337,7 @@ function BracketPool({ onSubmitted }: { onSubmitted: (entry: LeaderboardEntry) =
   const r32 = firstRoundMatches(draft, teams);
   const finalistIds = ["m101", "m102"].map((matchId) => draft.knockoutPicks[matchId]).filter(Boolean);
   const finalistScorers = finalistIds.flatMap((teamId) => squadCandidatesForTeamId(teamId));
+  const locked = submitted;
   const googleAuthUrl =
     typeof window !== "undefined" && process.env.NEXT_PUBLIC_SUPABASE_URL
       ? `${process.env.NEXT_PUBLIC_SUPABASE_URL}/auth/v1/authorize?${new URLSearchParams({
@@ -369,7 +377,20 @@ function BracketPool({ onSubmitted }: { onSubmitted: (entry: LeaderboardEntry) =
       setUserLabel(label);
       setAuthNote(data.user ? `Signed in as ${label}. Official submission is available.` : "Login required for official submit and PNG download.");
       if (data.user) {
-        setSubmitStatus(`Google sign-in complete as ${label}. You can submit your official bracket now.`);
+        const { data: existingBracket } = await supabase
+          .from("brackets")
+          .select("picks")
+          .eq("user_id", data.user.id)
+          .maybeSingle();
+        if (existingBracket?.picks) {
+          const savedDraft = existingBracket.picks as BracketDraft;
+          setDraft(savedDraft);
+          setFinalScoreText(savedDraft.finalScore ? savedDraft.finalScore.join("-") : "");
+          setSubmitted(true);
+          setSubmitStatus(`Official bracket locked as ${label}.`);
+        } else {
+          setSubmitStatus(`Google sign-in complete as ${label}. You can submit your official bracket now.`);
+        }
       }
     };
 
@@ -386,6 +407,7 @@ function BracketPool({ onSubmitted }: { onSubmitted: (entry: LeaderboardEntry) =
   }, []);
 
   const setGroupPick = (group: GroupId, slot: "first" | "second" | "third" | "fourth", teamId: string) => {
+    if (locked) return;
     setFinalScoreText("");
     setDraft((current) => {
       const nextGroupPicks = {
@@ -410,6 +432,7 @@ function BracketPool({ onSubmitted }: { onSubmitted: (entry: LeaderboardEntry) =
   };
 
   const toggleThird = (teamId: string) => {
+    if (locked) return;
     setDraft((current) => {
       const exists = current.thirdPlaceAdvancers.includes(teamId);
       const next = exists ? current.thirdPlaceAdvancers.filter((id) => id !== teamId) : [...current.thirdPlaceAdvancers, teamId].slice(0, 8);
@@ -418,10 +441,12 @@ function BracketPool({ onSubmitted }: { onSubmitted: (entry: LeaderboardEntry) =
   };
 
   const pickWinner = (matchId: string, teamId: string) => {
+    if (locked) return;
     setDraft((current) => ({ ...current, knockoutPicks: { ...current.knockoutPicks, [matchId]: teamId } }));
   };
 
   const fillModelPicks = () => {
+    if (locked) return;
     if (!window.confirm("This will replace your current draft bracket with model picks.")) return;
     setFinalScoreText("");
     const groupPicks = emptyDraft().groupPicks;
@@ -565,7 +590,7 @@ function BracketPool({ onSubmitted }: { onSubmitted: (entry: LeaderboardEntry) =
             </p>
           </div>
           <div className="flex w-full flex-wrap gap-2 sm:w-auto">
-            <button onClick={fillModelPicks} className="inline-flex h-10 max-w-full items-center gap-2 rounded-md border border-stone-300 bg-white px-3 text-sm font-bold">
+            <button onClick={fillModelPicks} disabled={locked} className="inline-flex h-10 max-w-full items-center gap-2 rounded-md border border-stone-300 bg-white px-3 text-sm font-bold disabled:cursor-not-allowed">
               <RefreshCw className="h-4 w-4" />
               Fill with model picks
             </button>
@@ -584,7 +609,7 @@ function BracketPool({ onSubmitted }: { onSubmitted: (entry: LeaderboardEntry) =
             </button>
             <button onClick={submit} disabled={submitted || submitting} className="inline-flex h-10 items-center gap-2 rounded-md bg-emerald-800 px-3 text-sm font-bold text-white disabled:cursor-not-allowed disabled:bg-stone-300">
               {submitted ? <Check className="h-4 w-4" /> : <Lock className="h-4 w-4" />}
-              {submitted ? "Submitted" : submitting ? "Submitting" : "Submit official bracket"}
+              {submitted ? "Bracket locked" : submitting ? "Submitting" : "Submit official bracket"}
             </button>
           </div>
         </div>
@@ -626,7 +651,7 @@ function BracketPool({ onSubmitted }: { onSubmitted: (entry: LeaderboardEntry) =
                     {(["first", "second", "third", "fourth"] as const).map((slot, index) => (
                       <div key={slot} className="mb-2 grid grid-cols-[72px_1fr] items-center gap-2">
                         <span className="text-sm font-bold text-stone-500">{index + 1}</span>
-                        <SelectTeam value={pick[slot]} teams={options.filter((team) => team.id === pick[slot] || !used.has(team.id))} onChange={(teamId) => setGroupPick(group, slot, teamId)} />
+                        <SelectTeam value={pick[slot]} teams={options.filter((team) => team.id === pick[slot] || !used.has(team.id))} onChange={(teamId) => setGroupPick(group, slot, teamId)} disabled={locked} />
                       </div>
                     ))}
                   </div>
@@ -646,7 +671,7 @@ function BracketPool({ onSubmitted }: { onSubmitted: (entry: LeaderboardEntry) =
                   <button
                     key={group}
                     type="button"
-                    disabled={!third}
+                    disabled={!third || locked}
                     onClick={() => third && toggleThird(third.id)}
                     className={`flex min-h-12 w-full flex-col items-start justify-center rounded-md border px-3 py-2 text-left text-xs font-bold ${
                       selected ? "border-emerald-700 bg-emerald-50 text-emerald-900" : "border-stone-200 bg-white text-stone-700"
@@ -674,7 +699,7 @@ function BracketPool({ onSubmitted }: { onSubmitted: (entry: LeaderboardEntry) =
                     <button
                       key={team?.id ?? Math.random()}
                       type="button"
-                      disabled={!team}
+                      disabled={!team || locked}
                       onClick={() => team && pickWinner(match.id, team.id)}
                       className={`flex w-full items-center justify-between rounded-md border px-3 py-2 text-left text-sm font-bold ${
                         team && draft.knockoutPicks[match.id] === team.id ? "border-emerald-700 bg-emerald-50 text-emerald-900" : "border-stone-200 bg-white"
@@ -689,7 +714,7 @@ function BracketPool({ onSubmitted }: { onSubmitted: (entry: LeaderboardEntry) =
           </div>
         </div>
 
-        {draft.thirdPlaceAdvancers.length === 8 ? <BracketGraphic draft={draft} matches={r32} pickWinner={pickWinner} /> : null}
+        {draft.thirdPlaceAdvancers.length === 8 ? <BracketGraphic draft={draft} matches={r32} pickWinner={pickWinner} locked={locked} /> : null}
 
         <div className="mt-6 grid gap-3 md:grid-cols-4">
           <Metric label="Your champion" value={champion ? teamText(champion) : "Pick final winner"} strong />
@@ -698,7 +723,7 @@ function BracketPool({ onSubmitted }: { onSubmitted: (entry: LeaderboardEntry) =
             <select
               value={draft.finalScorer ?? ""}
               onChange={(event) => setDraft((current) => ({ ...current, finalScorer: event.target.value }))}
-              disabled={!finalistScorers.length}
+              disabled={!finalistScorers.length || locked}
               className="mt-2 h-10 w-full rounded-md border border-stone-300 bg-white px-3 text-sm"
             >
               <option value="">{finalistScorers.length ? "Choose final scorer" : "Pick finalists first"}</option>
@@ -711,6 +736,7 @@ function BracketPool({ onSubmitted }: { onSubmitted: (entry: LeaderboardEntry) =
             <span className="text-xs font-bold uppercase tracking-wide text-stone-500">Predicted final score</span>
             <input
               value={finalScoreText}
+              disabled={locked}
               className="mt-2 h-10 w-full rounded-md border border-stone-300 px-3 text-sm"
               placeholder="Example: 2-1"
               onChange={(event) => {
@@ -730,7 +756,7 @@ function BracketPool({ onSubmitted }: { onSubmitted: (entry: LeaderboardEntry) =
               className="mt-2 inline-flex h-10 w-full items-center justify-center gap-2 rounded-md bg-emerald-400 px-3 text-sm font-black text-emerald-950 disabled:cursor-not-allowed disabled:bg-stone-300"
             >
               {submitted ? <Check className="h-4 w-4" /> : <Lock className="h-4 w-4" />}
-              {submitted ? "Submitted" : submitting ? "Submitting" : "Submit"}
+              {submitted ? "Locked" : submitting ? "Submitting" : "Submit"}
             </button>
           </div>
         </div>
@@ -743,10 +769,12 @@ function BracketGraphic({
   draft,
   matches,
   pickWinner,
+  locked = false,
 }: {
   draft: BracketDraft;
   matches: ReturnType<typeof firstRoundMatches>;
   pickWinner: (matchId: string, teamId: string) => void;
+  locked?: boolean;
 }) {
   const [mobileRoundIndex, setMobileRoundIndex] = useState(0);
   const teamFromPick = (matchId: string) => teamById.get(draft.knockoutPicks[matchId]);
@@ -848,6 +876,7 @@ function BracketGraphic({
                     <button
                       key={team.id}
                       type="button"
+                      disabled={locked}
                       onClick={() => pickWinner(match.id, team.id)}
                       className={`mb-1 flex h-10 w-full min-w-0 items-center justify-between rounded-sm border px-2 text-left text-xs font-black ${
                         draft.knockoutPicks[match.id] === team.id ? "border-emerald-700 bg-emerald-50 text-emerald-900" : "border-stone-200 bg-stone-50"
@@ -876,9 +905,10 @@ function BracketGraphic({
                       {presentTeams(match.home, match.away).length ? (
                         presentTeams(match.home, match.away).map((team) => (
                           <button
-                            key={team.id}
-                            type="button"
-                            onClick={() => pickWinner(match.id, team.id)}
+                          key={team.id}
+                          type="button"
+                          disabled={locked}
+                          onClick={() => pickWinner(match.id, team.id)}
                             className={`mb-1 flex h-9 w-full items-center justify-between rounded-sm border px-2 text-left text-xs font-black ${
                               draft.knockoutPicks[match.id] === team.id ? "border-emerald-700 bg-emerald-50 text-emerald-900" : "border-stone-200 bg-stone-50"
                             }`}
@@ -988,7 +1018,8 @@ function ModelPerformance() {
 }
 
 function Leaderboard({ localEntry }: { localEntry: LeaderboardEntry | null }) {
-  const [remoteEntries, setRemoteEntries] = useState<LeaderboardEntry[] | null>(null);
+  const [remoteEntries, setRemoteEntries] = useState<ViewableLeaderboardEntry[] | null>(null);
+  const [selectedEntry, setSelectedEntry] = useState<ViewableLeaderboardEntry | null>(null);
   const [personalDisplayName, setPersonalDisplayName] = useState("");
   const [personalChampionPick] = useState(() => {
     if (typeof window === "undefined") return "";
@@ -1036,6 +1067,8 @@ function Leaderboard({ localEntry }: { localEntry: LeaderboardEntry | null }) {
             displayName: row.display_name,
             points: 0,
             championPick: displayChampionPick(row.champion_pick, row.picks),
+            picks: row.picks as BracketDraft,
+            submittedAt: row.submitted_at,
           })),
         );
       });
@@ -1066,18 +1099,85 @@ function Leaderboard({ localEntry }: { localEntry: LeaderboardEntry | null }) {
             </tr>
           </thead>
           <tbody>
-            {visibleEntries.map((entry, index) => (
-              <tr key={`${entry.displayName}-${index}`} className="border-t border-stone-200">
-                <td className="p-3 font-black">{index + 1}</td>
-                <td className="p-3 font-bold">{entry.displayName}</td>
-                <td className="p-3">{entry.points}</td>
-                <td className="p-3 text-right font-bold">{entry.championPick}</td>
-              </tr>
-            ))}
+            {visibleEntries.map((entry, index) => {
+              const viewableEntry = entry as ViewableLeaderboardEntry;
+              return (
+                <tr
+                  key={`${entry.displayName}-${index}`}
+                  onClick={() => viewableEntry.picks && setSelectedEntry(viewableEntry)}
+                  className={`border-t border-stone-200 ${viewableEntry.picks ? "cursor-pointer transition hover:bg-white/10" : ""}`}
+                >
+                  <td className="p-3 font-black">{index + 1}</td>
+                  <td className="p-3 font-bold">{entry.displayName}</td>
+                  <td className="p-3">{entry.points}</td>
+                  <td className="p-3 text-right font-bold">{entry.championPick}</td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>
+      {selectedEntry?.picks ? <BracketPreviewModal entry={selectedEntry} onClose={() => setSelectedEntry(null)} /> : null}
     </section>
+  );
+}
+
+function BracketPreviewModal({ entry, onClose }: { entry: ViewableLeaderboardEntry; onClose: () => void }) {
+  const picks = entry.picks;
+  if (!picks) return null;
+  const champion = draftChampion(picks);
+  const selectedKnockouts = Object.entries(picks.knockoutPicks).filter(([, teamId]) => Boolean(teamId));
+
+  return (
+    <div className="fixed inset-0 z-50 overflow-y-auto bg-black/70 px-4 py-6 backdrop-blur-sm">
+      <div className="mx-auto max-w-5xl rounded-lg border border-white/15 bg-stone-50 p-4 shadow-2xl">
+        <div className="flex flex-wrap items-start justify-between gap-3 border-b border-stone-200 pb-3">
+          <div>
+            <p className="text-xs font-black uppercase tracking-wide text-emerald-800">Public bracket</p>
+            <h2 className="mt-1 text-2xl font-black">{entry.displayName}</h2>
+            <p className="mt-1 text-sm font-bold text-stone-500">
+              Champion: {teamText(teamById.get(champion ?? "") ?? undefined)}
+            </p>
+          </div>
+          <button type="button" onClick={onClose} className="h-10 rounded-md border border-stone-300 bg-white px-3 text-sm font-black">
+            Close
+          </button>
+        </div>
+
+        <div className="mt-4 grid gap-4 lg:grid-cols-2">
+          <div>
+            <h3 className="text-sm font-black uppercase tracking-wide text-stone-500">Group picks</h3>
+            <div className="mt-3 grid gap-2 sm:grid-cols-2">
+              {groupIds.map((group) => {
+                const pick = picks.groupPicks[group];
+                return (
+                  <div key={group} className="rounded-md border border-stone-200 bg-white p-3">
+                    <p className="mb-2 text-xs font-black uppercase tracking-wide text-stone-500">Group {group}</p>
+                    {(["first", "second", "third", "fourth"] as const).map((slot, index) => (
+                      <p key={slot} className="text-sm font-bold">
+                        {index + 1}. <TeamLabel team={teamById.get(pick[slot] ?? "")} />
+                      </p>
+                    ))}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          <div>
+            <h3 className="text-sm font-black uppercase tracking-wide text-stone-500">Knockout winners</h3>
+            <div className="mt-3 grid gap-2 sm:grid-cols-2">
+              {selectedKnockouts.map(([matchId, teamId]) => (
+                <div key={matchId} className="rounded-md border border-stone-200 bg-white p-3">
+                  <p className="text-xs font-black uppercase tracking-wide text-stone-500">{matchId.replace("m", "Match ")}</p>
+                  <p className="mt-1 text-sm font-bold"><TeamLabel team={teamById.get(teamId)} /></p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }
 
