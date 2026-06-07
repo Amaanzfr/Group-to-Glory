@@ -509,7 +509,7 @@ function BracketPool({ onSubmitted }: { onSubmitted: (entry: LeaderboardEntry) =
       return;
     }
     if (!draftChampion(draft)) {
-      window.alert("Pick the Match 104 winner before submitting.");
+      setSubmitStatus("Pick the Match 104 winner before submitting.");
       return;
     }
     if (!draft.finalScorer) {
@@ -567,7 +567,7 @@ function BracketPool({ onSubmitted }: { onSubmitted: (entry: LeaderboardEntry) =
       return;
     }
     setSubmitStatus("Opening Google sign-in...");
-    window.open(googleAuthUrl, "_self", "noopener,noreferrer");
+    window.location.assign(googleAuthUrl);
     window.setTimeout(() => {
       setSubmitStatus("If Google did not open, use the manual sign-in link below.");
     }, 900);
@@ -844,8 +844,9 @@ function BracketPool({ onSubmitted }: { onSubmitted: (entry: LeaderboardEntry) =
               className="mt-2 inline-flex h-10 w-full items-center justify-center gap-2 rounded-md bg-emerald-400 px-3 text-sm font-black text-emerald-950 disabled:cursor-not-allowed disabled:bg-stone-300"
             >
               {submitted ? <Check className="h-4 w-4" /> : <Lock className="h-4 w-4" />}
-              {correctionMode ? "Save correction" : submitted ? "Locked" : submitting ? "Submitting" : "Submit"}
+              {correctionMode ? "Save correction" : submitted ? "Locked" : submitting ? "Submitting" : signedIn ? "Submit" : "Continue with Google"}
             </button>
+            {submitStatus ? <p className="mt-3 rounded-md bg-stone-100 px-3 py-2 text-sm font-bold text-stone-700">{submitStatus}</p> : null}
           </div>
         </div>
       </div>
