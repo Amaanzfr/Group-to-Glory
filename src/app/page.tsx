@@ -13,7 +13,7 @@ import {
   Trophy,
   Users,
 } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { canBuildBracket, draftChampion, emptyDraft, firstRoundMatches, groupIds, groupTeams } from "@/lib/bracket-engine";
 import { predictMatch, modelChampion } from "@/lib/prediction-model";
 import { squadCandidatesForTeamId } from "@/lib/squad-candidates";
@@ -38,11 +38,18 @@ type LeaderboardRow = {
   champion_pick: string;
   picks?: BracketDraft | null;
   submitted_at: string;
+  private_pool_code?: string | null;
 };
 
 const teamById = new Map(teams.map((team) => [team.id, team]));
 const draftStorageKey = "group-to-glory-draft-v2";
+const privatePoolStorageKey = "group-to-glory-private-pool-v1";
 const adminEmail = (process.env.NEXT_PUBLIC_ADMIN_EMAIL || "amaanalizafar@gmail.com").toLowerCase();
+const privatePoolPassword = (process.env.NEXT_PUBLIC_PRIVATE_POOL_CODE || "group2026").trim().toLowerCase();
+
+function normalizePoolCode(value: string) {
+  return value.trim().toLowerCase();
+}
 
 function supabaseSetupMessage() {
   const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
@@ -83,6 +90,20 @@ function displayChampionPick(championPick: string | null, picks: unknown) {
       : undefined;
   const teamId = savedChampion || championPick || "";
   return teamById.get(teamId)?.name ?? teamId;
+}
+
+function mapRowsToEntries(rows: LeaderboardRow[], canOpenBrackets: boolean) {
+  return rows.map((row, index) => {
+    const maybePicks = "picks" in row ? (row.picks as BracketDraft) : null;
+    return {
+      rank: index + 1,
+      displayName: row.display_name,
+      points: 0,
+      championPick: displayChampionPick(row.champion_pick, maybePicks),
+      picks: canOpenBrackets ? maybePicks : null,
+      submittedAt: row.submitted_at,
+    };
+  });
 }
 
 function championTeamFromPick(championPick: string) {
@@ -1113,6 +1134,7 @@ function ModelPerformance() {
 
 function Leaderboard({ localEntry }: { localEntry: LeaderboardEntry | null }) {
   const [remoteEntries, setRemoteEntries] = useState<ViewableLeaderboardEntry[] | null>(null);
+  const [privateEntries, setPrivateEntries] = useState<ViewableLeaderboardEntry[] | null>(null);
   const [selectedEntry, setSelectedEntry] = useState<ViewableLeaderboardEntry | null>(null);
   const [viewerCanOpenBrackets, setViewerCanOpenBrackets] = useState(false);
   const [personalDisplayName, setPersonalDisplayName] = useState("");
@@ -1124,6 +1146,13 @@ function Leaderboard({ localEntry }: { localEntry: LeaderboardEntry | null }) {
     return savedChampion ? teamById.get(savedChampion)?.name ?? savedChampion : "";
   });
   const [status, setStatus] = useState("");
+  const [privateCodeInput, setPrivateCodeInput] = useState("");
+  const [privatePoolCode, setPrivatePoolCode] = useState(() => {
+    if (typeof window === "undefined") return "";
+    return window.localStorage.getItem(privatePoolStorageKey) || "";
+  });
+  const [privateStatus, setPrivateStatus] = useState("");
+  const [joiningPrivatePool, setJoiningPrivatePool] = useState(false);
   const baseEntries = remoteEntries ?? leaderboard;
   const entries = localEntry ? [localEntry, ...baseEntries.filter((entry) => entry.displayName !== localEntry.displayName)] : baseEntries;
   const visibleEntries =
@@ -1137,6 +1166,78 @@ function Leaderboard({ localEntry }: { localEntry: LeaderboardEntry | null }) {
             : entry,
         )
       : entries;
+
+  const loadPrivatePool = useCallback(async (code: string, canOpenBrackets = viewerCanOpenBrackets) => {
+    const supabase = createSupabaseBrowserClient();
+    if (!supabase) return;
+    const result = canOpenBrackets
+      ? await supabase
+          .from("brackets")
+          .select("display_name, champion_pick, picks, submitted_at, private_pool_code")
+          .eq("private_pool_code", code)
+          .order("submitted_at", { ascending: true })
+      : await supabase
+          .from("brackets")
+          .select("display_name, champion_pick, submitted_at, private_pool_code")
+          .eq("private_pool_code", code)
+          .order("submitted_at", { ascending: true });
+
+    if (result.error) {
+      setPrivateStatus("Private Pool needs the Supabase SQL update before it can load.");
+      return;
+    }
+    setPrivateEntries(mapRowsToEntries((result.data as LeaderboardRow[] | null) ?? [], canOpenBrackets));
+  }, [viewerCanOpenBrackets]);
+
+  const joinPrivatePool = async () => {
+    setPrivateStatus("");
+    const code = normalizePoolCode(privateCodeInput);
+    if (!code) {
+      setPrivateStatus("Enter the private pool code.");
+      return;
+    }
+    if (code !== privatePoolPassword) {
+      setPrivateStatus("That code does not match this private pool.");
+      return;
+    }
+    const supabase = createSupabaseBrowserClient();
+    if (!supabase) {
+      setPrivateStatus(supabaseSetupMessage());
+      return;
+    }
+    setJoiningPrivatePool(true);
+    try {
+      const { data: userData } = await supabase.auth.getUser();
+      if (!userData.user) {
+        setPrivateStatus("Sign in and submit a bracket before joining the private pool.");
+        return;
+      }
+      const { data: ownBracket, error: ownError } = await supabase
+        .from("brackets")
+        .select("id")
+        .eq("user_id", userData.user.id)
+        .maybeSingle();
+      if (ownError || !ownBracket) {
+        setPrivateStatus("Submit your official bracket first, then come back here to join the private pool.");
+        return;
+      }
+      const { error } = await supabase
+        .from("brackets")
+        .update({ private_pool_code: code, private_pool_joined_at: new Date().toISOString() })
+        .eq("user_id", userData.user.id);
+      if (error) {
+        setPrivateStatus(error.message.includes("private_pool_code") ? "Run the Supabase SQL update first, then try joining again." : error.message);
+        return;
+      }
+      window.localStorage.setItem(privatePoolStorageKey, code);
+      setPrivatePoolCode(code);
+      setPrivateCodeInput("");
+      setPrivateStatus("Private Pool unlocked. Settlements stay outside the app.");
+      await loadPrivatePool(code, true);
+    } finally {
+      setJoiningPrivatePool(false);
+    }
+  };
 
   useEffect(() => {
     const supabase = createSupabaseBrowserClient();
@@ -1166,25 +1267,18 @@ function Leaderboard({ localEntry }: { localEntry: LeaderboardEntry | null }) {
         return;
       }
       if (!data?.length) return;
-      setRemoteEntries(
-        data.map((row, index) => {
-          const maybePicks = "picks" in row ? (row.picks as BracketDraft) : null;
-          return {
-            rank: index + 1,
-            displayName: row.display_name,
-            points: 0,
-            championPick: displayChampionPick(row.champion_pick, maybePicks),
-            picks: canOpenBrackets ? maybePicks : null,
-            submittedAt: row.submitted_at,
-          };
-        }),
-      );
+      setRemoteEntries(mapRowsToEntries(data, canOpenBrackets));
       if (!canOpenBrackets) {
         setStatus("Submit your own official bracket to unlock public bracket previews.");
       }
+      const savedPrivateCode = typeof window === "undefined" ? "" : window.localStorage.getItem(privatePoolStorageKey);
+      if (savedPrivateCode) {
+        setPrivatePoolCode(savedPrivateCode);
+        await loadPrivatePool(savedPrivateCode, canOpenBrackets);
+      }
     };
     loadLeaderboard();
-  }, []);
+  }, [loadPrivatePool]);
 
   if (selectedEntry?.picks) {
     return <BracketPreviewPage entry={selectedEntry} onBack={() => setSelectedEntry(null)} />;
@@ -1234,6 +1328,81 @@ function Leaderboard({ localEntry }: { localEntry: LeaderboardEntry | null }) {
             })}
           </tbody>
         </table>
+      </div>
+
+      <div className="mt-6 rounded-lg border border-amber-200/50 bg-amber-50/70 p-4">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <p className="text-xs font-black uppercase tracking-wide text-amber-200">Private Pool</p>
+            <h3 className="mt-1 text-xl font-black">Code-gated leaderboard</h3>
+            <p className="mt-2 max-w-2xl text-sm text-stone-600">
+              Optional side pool for invited people only. The app tracks standings; any money collection or payout is handled outside the app by the group.
+            </p>
+          </div>
+          {privatePoolCode ? (
+            <span className="rounded-full bg-emerald-100 px-3 py-1 text-xs font-black uppercase tracking-wide text-emerald-900">Unlocked</span>
+          ) : (
+            <span className="rounded-full bg-stone-100 px-3 py-1 text-xs font-black uppercase tracking-wide text-stone-500">Locked</span>
+          )}
+        </div>
+
+        {!privatePoolCode ? (
+          <div className="mt-4 grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto]">
+            <input
+              value={privateCodeInput}
+              onChange={(event) => setPrivateCodeInput(event.target.value)}
+              placeholder="Enter private pool code"
+              className="h-11 rounded-md border border-stone-300 bg-white px-3 text-sm outline-none focus:border-emerald-700 focus:ring-2 focus:ring-emerald-100"
+            />
+            <button
+              type="button"
+              onClick={joinPrivatePool}
+              disabled={joiningPrivatePool}
+              className="inline-flex h-11 items-center justify-center gap-2 rounded-md bg-emerald-800 px-4 text-sm font-black text-white disabled:cursor-not-allowed disabled:bg-stone-300"
+            >
+              <Lock className="h-4 w-4" />
+              {joiningPrivatePool ? "Joining" : "Join Private Pool"}
+            </button>
+          </div>
+        ) : (
+          <div className="mt-4 overflow-x-auto rounded-md border border-stone-200">
+            <table className="min-w-[520px] w-full border-collapse text-left text-sm">
+              <thead className="bg-stone-100 text-xs uppercase tracking-wide text-stone-500">
+                <tr>
+                  <th className="p-3">Rank</th>
+                  <th className="p-3">Display name</th>
+                  <th className="p-3">Points</th>
+                  <th className="p-3 text-right">Tournament winner</th>
+                </tr>
+              </thead>
+              <tbody>
+                {(privateEntries ?? []).map((entry, index) => {
+                  const viewableEntry = entry as ViewableLeaderboardEntry;
+                  return (
+                    <tr
+                      key={`private-${entry.displayName}-${index}`}
+                      onClick={() => viewerCanOpenBrackets && viewableEntry.picks && setSelectedEntry(viewableEntry)}
+                      className={`border-t border-stone-200 ${viewerCanOpenBrackets && viewableEntry.picks ? "cursor-pointer transition hover:bg-white/10" : ""}`}
+                    >
+                      <td className="p-3 font-black">{index + 1}</td>
+                      <td className="p-3 font-bold">{entry.displayName}</td>
+                      <td className="p-3">{entry.points}</td>
+                      <td className="p-3 text-right text-xl font-bold" title={entry.championPick}>
+                        <span className="inline-flex justify-end"><TeamFlag team={championTeamFromPick(entry.championPick)} /></span>
+                      </td>
+                    </tr>
+                  );
+                })}
+                {privateEntries && privateEntries.length === 0 ? (
+                  <tr>
+                    <td className="p-3 text-sm font-bold text-stone-500" colSpan={4}>No one has joined this private pool yet.</td>
+                  </tr>
+                ) : null}
+              </tbody>
+            </table>
+          </div>
+        )}
+        {privateStatus ? <p className="mt-3 rounded-md bg-stone-100 px-3 py-2 text-sm font-bold text-stone-700">{privateStatus}</p> : null}
       </div>
     </section>
   );

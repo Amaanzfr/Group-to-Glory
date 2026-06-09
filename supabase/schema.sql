@@ -19,9 +19,15 @@ create table if not exists public.brackets (
   champion_pick text not null,
   final_goalscorer_pick text,
   final_score text,
+  private_pool_code text,
+  private_pool_joined_at timestamptz,
   submitted_at timestamptz not null default now(),
   unique (user_id)
 );
+
+alter table public.brackets
+  add column if not exists private_pool_code text,
+  add column if not exists private_pool_joined_at timestamptz;
 
 create table if not exists public.leaderboard_scores (
   bracket_id bigint primary key references public.brackets(id) on delete cascade,
@@ -49,6 +55,11 @@ create policy "Public bracket leaderboard rows are readable"
 
 create policy "Users can submit one bracket"
   on public.brackets for insert
+  with check (auth.uid() = user_id);
+
+create policy "Users can join private pool"
+  on public.brackets for update
+  using (auth.uid() = user_id)
   with check (auth.uid() = user_id);
 
 create policy "Admin can correct own bracket"
