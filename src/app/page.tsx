@@ -45,7 +45,7 @@ const teamById = new Map(teams.map((team) => [team.id, team]));
 const draftStorageKey = "group-to-glory-draft-v2";
 const privatePoolStorageKey = "group-to-glory-private-pool-v1";
 const adminEmail = (process.env.NEXT_PUBLIC_ADMIN_EMAIL || "amaanalizafar@gmail.com").toLowerCase();
-const privatePoolPassword = (process.env.NEXT_PUBLIC_PRIVATE_POOL_CODE || "group2026").trim().toLowerCase();
+const privatePoolPassword = (process.env.NEXT_PUBLIC_PRIVATE_POOL_CODE || "az").trim().toLowerCase();
 
 function normalizePoolCode(value: string) {
   return value.trim().toLowerCase();
@@ -1197,7 +1197,7 @@ function Leaderboard({ localEntry }: { localEntry: LeaderboardEntry | null }) {
       return;
     }
     if (code !== privatePoolPassword) {
-      setPrivateStatus("That code does not match this private pool. If you changed it in Vercel, redeploy the site so the new code goes live.");
+      setPrivateStatus("That code does not match this private pool. Try az, and if you just changed the code, restart/redeploy the site first.");
       return;
     }
     const supabase = createSupabaseBrowserClient();
