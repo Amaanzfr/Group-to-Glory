@@ -57,6 +57,14 @@ function teamText(team?: Team) {
   return `${team.flag.startsWith("code:") ? team.flag.replace("code:", "") : team.flag} ${team.name}`;
 }
 
+function TeamFlag({ team, className = "" }: { team?: Team; className?: string }) {
+  if (!team) return null;
+  if (team.flag.startsWith("code:")) {
+    return <span className={`flag-code ${className}`.trim()}>{team.flag.replace("code:", "")}</span>;
+  }
+  return <span className={`flag ${className}`.trim()}>{team.flag}</span>;
+}
+
 function displayChampionPick(championPick: string | null, picks: unknown) {
   const savedChampion =
     picks && typeof picks === "object" && "knockoutPicks" in picks
@@ -82,17 +90,9 @@ function pct(value: number) {
 
 function TeamLabel({ team }: { team?: Team }) {
   if (!team) return <span className="text-stone-400">TBD</span>;
-  if (team.flag.startsWith("code:")) {
-    return (
-      <span className="inline-flex min-w-0 items-center gap-2">
-        <span className="rounded-sm border border-stone-200 bg-stone-100 px-1.5 py-0.5 text-[10px] font-black tracking-wide">{team.flag.replace("code:", "")}</span>
-        <span className="min-w-0 break-words">{team.name}</span>
-      </span>
-    );
-  }
   return (
     <span className="inline-flex min-w-0 items-center gap-2">
-      <span className="flag">{team.flag}</span>
+      <TeamFlag team={team} />
       <span className="min-w-0 break-words">{team.name}</span>
     </span>
   );
@@ -122,7 +122,7 @@ function SelectTeam({
         <option value="">{placeholder}</option>
         {options.map((team) => (
           <option key={team.id} value={team.id}>
-            {team.flag} {team.name}
+            {teamText(team)}
           </option>
         ))}
       </select>
@@ -1317,7 +1317,7 @@ function CelebrationOverlay({ entry, onNext }: { entry: LeaderboardEntry; onNext
           <p className="mt-5 text-sm font-black uppercase tracking-wide text-emerald-200">Congratulations!</p>
           <h2 className="mt-2 text-3xl font-black">Your Champion</h2>
           <div className="mt-5 rounded-md border border-white/15 bg-white/10 px-4 py-5">
-            <p className="text-5xl leading-none">{champion?.flag.startsWith("code:") ? champion.flag.replace("code:", "") : champion?.flag}</p>
+            <p className="text-5xl leading-none"><TeamFlag team={champion} className="champion-flag" /></p>
             <p className="mt-3 text-3xl font-black">{entry.championPick}</p>
           </div>
           <p className="mt-4 text-sm font-semibold text-stone-300">Your official bracket is locked. The leaderboard shows public entries only.</p>
