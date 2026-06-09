@@ -46,6 +46,24 @@ input {
   font-family: "Apple Color Emoji", "Segoe UI Emoji", sans-serif;
 }
 
+.flag-img {
+  display: inline-block;
+  width: 1.35rem;
+  height: 0.9rem;
+  flex: 0 0 auto;
+  border-radius: 0.12rem;
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: cover;
+  box-shadow: 0 0 0 1px rgba(246, 241, 223, 0.28);
+}
+
+.champion-flag.flag-img {
+  width: 4.75rem;
+  height: 2.85rem;
+  border-radius: 0.35rem;
+}
+
 .flag-code {
   display: inline-flex;
   min-width: 2.25rem;

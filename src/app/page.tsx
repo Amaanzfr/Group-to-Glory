@@ -54,11 +54,22 @@ function supabaseSetupMessage() {
 
 function teamText(team?: Team) {
   if (!team) return "TBD";
+  if (team.flag.startsWith("asset:")) return team.name;
   return `${team.flag.startsWith("code:") ? team.flag.replace("code:", "") : team.flag} ${team.name}`;
 }
 
 function TeamFlag({ team, className = "" }: { team?: Team; className?: string }) {
   if (!team) return null;
+  if (team.flag.startsWith("asset:")) {
+    return (
+      <span
+        role="img"
+        aria-label={`${team.name} flag`}
+        className={`flag-img ${className}`.trim()}
+        style={{ backgroundImage: `url(${team.flag.replace("asset:", "")})` }}
+      />
+    );
+  }
   if (team.flag.startsWith("code:")) {
     return <span className={`flag-code ${className}`.trim()}>{team.flag.replace("code:", "")}</span>;
   }
@@ -76,12 +87,6 @@ function displayChampionPick(championPick: string | null, picks: unknown) {
 
 function championTeamFromPick(championPick: string) {
   return teams.find((team) => team.id === championPick || team.name === championPick);
-}
-
-function championFlag(championPick: string) {
-  const team = championTeamFromPick(championPick);
-  if (!team) return championPick || "TBD";
-  return team.flag.startsWith("code:") ? team.flag.replace("code:", "") : team.flag;
 }
 
 function pct(value: number) {
@@ -1221,7 +1226,9 @@ function Leaderboard({ localEntry }: { localEntry: LeaderboardEntry | null }) {
                   <td className="p-3 font-black">{index + 1}</td>
                   <td className="p-3 font-bold">{entry.displayName}</td>
                   <td className="p-3">{entry.points}</td>
-                  <td className="p-3 text-right text-xl font-bold" title={entry.championPick}>{championFlag(entry.championPick)}</td>
+                  <td className="p-3 text-right text-xl font-bold" title={entry.championPick}>
+                    <span className="inline-flex justify-end"><TeamFlag team={championTeamFromPick(entry.championPick)} /></span>
+                  </td>
                 </tr>
               );
             })}
