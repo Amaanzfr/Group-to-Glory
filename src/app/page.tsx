@@ -1197,7 +1197,7 @@ function Leaderboard({ localEntry }: { localEntry: LeaderboardEntry | null }) {
       return;
     }
     if (code !== privatePoolPassword) {
-      setPrivateStatus("That code does not match this private pool.");
+      setPrivateStatus("That code does not match this private pool. If you changed it in Vercel, redeploy the site so the new code goes live.");
       return;
     }
     const supabase = createSupabaseBrowserClient();
@@ -1226,7 +1226,14 @@ function Leaderboard({ localEntry }: { localEntry: LeaderboardEntry | null }) {
         .update({ private_pool_code: code, private_pool_joined_at: new Date().toISOString() })
         .eq("user_id", userData.user.id);
       if (error) {
-        setPrivateStatus(error.message.includes("private_pool_code") ? "Run the Supabase SQL update first, then try joining again." : error.message);
+        const message = error.message.toLowerCase();
+        if (message.includes("private_pool_code") || message.includes("column")) {
+          setPrivateStatus("Run the Supabase SQL update first, then try joining again.");
+        } else if (message.includes("row-level security") || message.includes("policy")) {
+          setPrivateStatus("Supabase blocked the private pool update. Add the private pool update policy in SQL, then try again.");
+        } else {
+          setPrivateStatus(error.message);
+        }
         return;
       }
       window.localStorage.setItem(privatePoolStorageKey, code);
@@ -1330,12 +1337,12 @@ function Leaderboard({ localEntry }: { localEntry: LeaderboardEntry | null }) {
         </table>
       </div>
 
-      <div className="mt-6 rounded-lg border border-amber-200/50 bg-amber-50/70 p-4">
+      <div className="private-pool-panel mt-6 rounded-lg border p-4">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
-            <p className="text-xs font-black uppercase tracking-wide text-amber-200">Private Pool</p>
+            <p className="private-eyebrow text-xs font-black uppercase tracking-wide">Private Pool</p>
             <h3 className="mt-1 text-xl font-black">Code-gated leaderboard</h3>
-            <p className="mt-2 max-w-2xl text-sm text-stone-600">
+            <p className="private-muted mt-2 max-w-2xl text-sm">
               Optional side pool for invited people only. The app tracks standings; any money collection or payout is handled outside the app by the group.
             </p>
           </div>
@@ -1352,7 +1359,7 @@ function Leaderboard({ localEntry }: { localEntry: LeaderboardEntry | null }) {
               value={privateCodeInput}
               onChange={(event) => setPrivateCodeInput(event.target.value)}
               placeholder="Enter private pool code"
-              className="h-11 rounded-md border border-stone-300 bg-white px-3 text-sm outline-none focus:border-emerald-700 focus:ring-2 focus:ring-emerald-100"
+              className="private-input h-11 rounded-md border px-3 text-sm outline-none focus:border-emerald-700 focus:ring-2 focus:ring-emerald-100"
             />
             <button
               type="button"
@@ -1395,14 +1402,14 @@ function Leaderboard({ localEntry }: { localEntry: LeaderboardEntry | null }) {
                 })}
                 {privateEntries && privateEntries.length === 0 ? (
                   <tr>
-                    <td className="p-3 text-sm font-bold text-stone-500" colSpan={4}>No one has joined this private pool yet.</td>
+                    <td className="private-muted p-3 text-sm font-bold" colSpan={4}>No one has joined this private pool yet.</td>
                   </tr>
                 ) : null}
               </tbody>
             </table>
           </div>
         )}
-        {privateStatus ? <p className="mt-3 rounded-md bg-stone-100 px-3 py-2 text-sm font-bold text-stone-700">{privateStatus}</p> : null}
+        {privateStatus ? <p className="private-status mt-3 rounded-md px-3 py-2 text-sm font-bold">{privateStatus}</p> : null}
       </div>
     </section>
   );

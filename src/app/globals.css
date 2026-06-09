@@ -87,6 +87,40 @@ input {
   padding: 0.25rem 0.55rem;
 }
 
+.private-pool-panel {
+  border-color: rgba(245, 196, 81, 0.38);
+  background: rgba(31, 34, 24, 0.88);
+  color: #f8f3df;
+}
+
+.private-pool-panel h3 {
+  color: #fff8df;
+}
+
+.private-eyebrow {
+  color: #f5c451;
+}
+
+.private-muted {
+  color: #d7cfb0;
+}
+
+.private-input {
+  border-color: rgba(248, 243, 223, 0.2);
+  background: rgba(6, 16, 13, 0.82);
+  color: #fff8df;
+}
+
+.private-input::placeholder {
+  color: #b7ad8e;
+}
+
+.private-status {
+  border: 1px solid rgba(245, 196, 81, 0.32);
+  background: rgba(7, 18, 15, 0.75);
+  color: #fff1b8;
+}
+
 .bg-white,
 .bg-stone-50 {
   background: var(--panel) !important;
