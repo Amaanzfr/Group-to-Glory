@@ -185,5 +185,5 @@ export const leaderboard: LeaderboardEntry[] = [
 ];
 
 export const amaanWinnerId = "france";
-export const deadlineIso = "2026-06-11T18:00:00.000Z";
+export const deadlineIso = "2026-06-18T02:00:00.000Z";
 export const dataUpdatedIso = new Date().toISOString();

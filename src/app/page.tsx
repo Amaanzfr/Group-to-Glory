@@ -51,6 +51,17 @@ function normalizePoolCode(value: string) {
   return value.trim().toLowerCase();
 }
 
+function formatDeadline(value: string) {
+  return new Intl.DateTimeFormat("en-US", {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    timeZoneName: "short",
+  }).format(new Date(value));
+}
+
 function supabaseSetupMessage() {
   const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
   if (key?.startsWith("sb_secret_")) {
@@ -319,7 +330,7 @@ function Header({ activeTab, setActiveTab }: { activeTab: TabId; setActiveTab: (
           </div>
           <div className="grid gap-2 text-sm sm:grid-cols-3">
             <Badge label="Amaan's AI winner" value={teamText(champion)} />
-            <Badge label="Bracket deadline" value={new Date(deadlineIso).toLocaleDateString()} />
+            <Badge label="Bracket deadline" value={formatDeadline(deadlineIso)} />
             <Badge label="Data updated" value={new Date(dataUpdatedIso).toLocaleString()} />
           </div>
         </div>
@@ -370,6 +381,7 @@ function BracketPool({ onSubmitted }: { onSubmitted: (entry: LeaderboardEntry) =
   const [signedIn, setSignedIn] = useState(false);
   const [userLabel, setUserLabel] = useState("");
   const [submitStatus, setSubmitStatus] = useState("");
+  const [deadlinePassed, setDeadlinePassed] = useState(false);
   const [authNote, setAuthNote] = useState(() =>
     createSupabaseBrowserClient()
       ? "Login required for official submit and PNG download."
@@ -394,6 +406,13 @@ function BracketPool({ onSubmitted }: { onSubmitted: (entry: LeaderboardEntry) =
   useEffect(() => {
     window.localStorage.setItem(draftStorageKey, JSON.stringify(draft));
   }, [draft]);
+
+  useEffect(() => {
+    const updateDeadlineState = () => setDeadlinePassed(Date.now() > new Date(deadlineIso).getTime());
+    updateDeadlineState();
+    const timer = window.setInterval(updateDeadlineState, 60_000);
+    return () => window.clearInterval(timer);
+  }, []);
 
   useEffect(() => {
     const supabase = createSupabaseBrowserClient();
@@ -519,6 +538,11 @@ function BracketPool({ onSubmitted }: { onSubmitted: (entry: LeaderboardEntry) =
 
   const submit = async () => {
     setSubmitStatus("");
+    if (submitting || submitted) return;
+    if (deadlinePassed) {
+      setSubmitStatus(`Bracket submissions closed on ${formatDeadline(deadlineIso)}.`);
+      return;
+    }
     if (!canBuildBracket(draft)) {
       setSubmitStatus("Finish group standings and select exactly 8 third-place advancers.");
       return;
@@ -526,12 +550,6 @@ function BracketPool({ onSubmitted }: { onSubmitted: (entry: LeaderboardEntry) =
     const supabase = createSupabaseBrowserClient();
     if (!supabase) {
       setAuthNote(supabaseSetupMessage());
-      return;
-    }
-    const { data } = await supabase.auth.getUser();
-    if (!data.user) {
-      setSubmitStatus("Opening Google sign-in. Come back here after it finishes and hit submit once more.");
-      await signIn();
       return;
     }
     if (!draftChampion(draft)) {
@@ -546,11 +564,19 @@ function BracketPool({ onSubmitted }: { onSubmitted: (entry: LeaderboardEntry) =
       setSubmitStatus("Enter a predicted final score like 2-1 before submitting.");
       return;
     }
-    if (!window.confirm("Official bracket submissions are final. You cannot edit after submitting.")) return;
-    const displayName = data.user.user_metadata?.full_name || data.user.email?.split("@")[0] || "Player";
-    const championPick = draftChampion(draft) ?? "";
     setSubmitting(true);
+    setSubmitStatus("Submitting your final bracket...");
     try {
+      const { data, error: userError } = await supabase.auth.getUser();
+      if (userError) throw userError;
+      if (!data.user) {
+        setSubmitStatus("Opening Google sign-in. Come back here after it finishes and hit submit once more.");
+        setSubmitting(false);
+        await signIn();
+        return;
+      }
+      const displayName = data.user.user_metadata?.full_name || data.user.email?.split("@")[0] || "Player";
+      const championPick = draftChampion(draft) ?? "";
       const { error } = await supabase.from("brackets").insert({
         user_id: data.user.id,
         display_name: displayName,
@@ -560,9 +586,9 @@ function BracketPool({ onSubmitted }: { onSubmitted: (entry: LeaderboardEntry) =
         final_score: draft.finalScore?.join("-") ?? null,
       });
       if (error) {
-        if (error.message.includes("duplicate")) {
+        if (error.message.toLowerCase().includes("duplicate")) {
           setSubmitted(true);
-          setSubmitStatus("You already submitted an official bracket. Opening your leaderboard view.");
+          setSubmitStatus("You already submitted an official bracket. Your bracket is locked.");
           onSubmitted({
             rank: 1,
             displayName,
@@ -575,13 +601,15 @@ function BracketPool({ onSubmitted }: { onSubmitted: (entry: LeaderboardEntry) =
         return;
       }
       setSubmitted(true);
-      setSubmitStatus("Official bracket submitted.");
+      setSubmitStatus("Official bracket submitted. You are locked in.");
       onSubmitted({
         rank: 1,
         displayName,
         points: 0,
         championPick: teamById.get(championPick)?.name ?? championPick,
       });
+    } catch (caught) {
+      setSubmitStatus(caught instanceof Error ? caught.message : "Something went wrong submitting. Try again once.");
     } finally {
       setSubmitting(false);
     }
@@ -686,7 +714,7 @@ function BracketPool({ onSubmitted }: { onSubmitted: (entry: LeaderboardEntry) =
             <p className="text-xs font-bold uppercase tracking-wide text-emerald-800">Public bracket pool</p>
             <h2 className="mt-1 text-2xl font-black">Build one official bracket</h2>
             <p className="mt-2 max-w-3xl text-sm text-stone-600">
-              Pick group standings, choose the eight third-place advancers, complete the knockout path, then submit once. Official bracket submissions are final.
+              Pick group standings, choose the eight third-place advancers, complete the knockout path, then submit once. Official bracket submissions are final. Open until {formatDeadline(deadlineIso)}.
             </p>
           </div>
           <div className="flex w-full flex-wrap gap-2 sm:w-auto">
@@ -707,9 +735,9 @@ function BracketPool({ onSubmitted }: { onSubmitted: (entry: LeaderboardEntry) =
               <Download className="h-4 w-4" />
               Download PNG
             </button>
-            <button onClick={submit} disabled={submitted || submitting} className="inline-flex h-10 items-center gap-2 rounded-md bg-emerald-800 px-3 text-sm font-bold text-white disabled:cursor-not-allowed disabled:bg-stone-300">
+            <button onClick={submit} disabled={submitted || submitting || deadlinePassed} className="inline-flex h-10 items-center gap-2 rounded-md bg-emerald-800 px-3 text-sm font-bold text-white disabled:cursor-not-allowed disabled:bg-stone-300">
               {submitted ? <Check className="h-4 w-4" /> : <Lock className="h-4 w-4" />}
-              {submitted ? "Bracket locked" : submitting ? "Submitting" : "Submit official bracket"}
+              {submitted ? "Bracket locked" : submitting ? "Submitting..." : deadlinePassed ? "Submissions closed" : "Submit official bracket"}
             </button>
             {submitted && isAdmin ? (
               <button
@@ -866,11 +894,11 @@ function BracketPool({ onSubmitted }: { onSubmitted: (entry: LeaderboardEntry) =
             <button
               type="button"
               onClick={correctionMode ? saveCorrection : submit}
-              disabled={(submitted && !correctionMode) || submitting}
+              disabled={(submitted && !correctionMode) || submitting || (!correctionMode && deadlinePassed)}
               className="mt-2 inline-flex h-10 w-full items-center justify-center gap-2 rounded-md bg-emerald-400 px-3 text-sm font-black text-emerald-950 disabled:cursor-not-allowed disabled:bg-stone-300"
             >
               {submitted ? <Check className="h-4 w-4" /> : <Lock className="h-4 w-4" />}
-              {correctionMode ? "Save correction" : submitted ? "Locked" : submitting ? "Submitting" : signedIn ? "Submit" : "Continue with Google"}
+              {correctionMode ? "Save correction" : submitted ? "Locked" : submitting ? "Submitting..." : deadlinePassed ? "Closed" : signedIn ? "Submit final bracket" : "Continue with Google"}
             </button>
             {submitStatus ? <p className="mt-3 rounded-md bg-stone-100 px-3 py-2 text-sm font-bold text-stone-700">{submitStatus}</p> : null}
           </div>
