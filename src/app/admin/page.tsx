@@ -2,8 +2,10 @@ import { BarChart3, Database, RefreshCw, ShieldCheck } from "lucide-react";
 import { sportsProviderLabels } from "@/lib/server-config";
 import { dataUpdatedIso, deadlineIso } from "@/lib/tournament-data";
 
-export default function AdminPage() {
+export default async function AdminPage({ searchParams }: { searchParams?: Promise<{ unlock?: string }> }) {
   const providers = sportsProviderLabels();
+  const params = await searchParams;
+  const unlockMessage = params?.unlock;
 
   return (
     <main className="mx-auto max-w-5xl px-4 py-8">
@@ -38,6 +40,7 @@ export default function AdminPage() {
 
       <div className="mt-5 rounded-lg border border-stone-200 bg-white p-5 shadow-sm">
         <h2 className="text-lg font-black">Emergency controls</h2>
+        {unlockMessage ? <p className="mt-3 rounded-md bg-stone-100 px-3 py-2 text-sm font-bold text-stone-700">{unlockMessage}</p> : null}
         <div className="mt-4 flex flex-wrap gap-2">
           <form action="/api/admin/refresh" method="post">
             <button className="inline-flex h-10 items-center gap-2 rounded-md bg-emerald-800 px-3 text-sm font-bold text-white">
@@ -49,6 +52,25 @@ export default function AdminPage() {
             <button className="inline-flex h-10 items-center gap-2 rounded-md border border-stone-300 bg-white px-3 text-sm font-bold">
               <BarChart3 className="h-4 w-4" />
               Recalculate scores
+            </button>
+          </form>
+        </div>
+        <div className="mt-5 rounded-md border border-amber-200 bg-amber-50 p-4">
+          <h3 className="text-base font-black">Unlock a submitted bracket</h3>
+          <p className="mt-1 text-sm font-semibold text-stone-600">
+            Deletes one submitted entry so that person can reload, sign in, and submit again. Use only before your cutoff.
+          </p>
+          <form action="/api/admin/unlock" method="post" className="mt-4 grid gap-3 md:grid-cols-[1fr_1fr_auto]">
+            <label className="grid gap-1">
+              <span className="text-xs font-black uppercase tracking-wide text-stone-500">Email or exact display name</span>
+              <input name="target" required placeholder="name@email.com or Display Name" className="h-10 rounded-md border border-stone-300 bg-white px-3 text-sm" />
+            </label>
+            <label className="grid gap-1">
+              <span className="text-xs font-black uppercase tracking-wide text-stone-500">Admin secret</span>
+              <input name="adminSecret" required type="password" placeholder="ADMIN_ACTION_SECRET" className="h-10 rounded-md border border-stone-300 bg-white px-3 text-sm" />
+            </label>
+            <button className="mt-5 inline-flex h-10 items-center justify-center rounded-md bg-amber-500 px-3 text-sm font-black text-stone-950">
+              Unlock
             </button>
           </form>
         </div>
