@@ -753,6 +753,18 @@ function BracketPool({ onSubmitted }: { onSubmitted: (entry: LeaderboardEntry) =
             ) : null}
           </div>
         </div>
+        <div className="mt-4 rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3">
+          <p className="text-sm font-black">How to submit</p>
+          <ol className="mt-2 grid gap-1 text-sm font-semibold text-stone-700 sm:grid-cols-2">
+            <li>1. Pick all four teams in every group.</li>
+            <li>2. Choose exactly 8 third-place teams to advance.</li>
+            <li>3. Pick every knockout winner through the final.</li>
+            <li>4. Choose one final goalscorer tie-breaker.</li>
+            <li>5. Enter the final score, like 2-1.</li>
+            <li>6. Sign in with Google, then hit Submit.</li>
+          </ol>
+          <p className="mt-2 text-xs font-bold text-stone-500">On phones, the easiest submit button is at the bottom next to the final score. Once submitted, your bracket is locked.</p>
+        </div>
         <p className="mt-3 text-xs font-semibold text-stone-500">{authNote}</p>
         {submitStatus ? (
           <div className="mt-2 rounded-md bg-stone-100 px-3 py-2 text-sm font-bold text-stone-700">
