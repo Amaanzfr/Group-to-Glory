@@ -46,9 +46,99 @@ const draftStorageKey = "group-to-glory-draft-v2";
 const privatePoolStorageKey = "group-to-glory-private-pool-v1";
 const adminEmail = (process.env.NEXT_PUBLIC_ADMIN_EMAIL || "amaanalizafar@gmail.com").toLowerCase();
 const privatePoolPassword = (process.env.NEXT_PUBLIC_PRIVATE_POOL_CODE || "az").trim().toLowerCase();
+const knockoutFeeders: Record<string, string[]> = {
+  m89: ["m74", "m77"],
+  m90: ["m73", "m75"],
+  m91: ["m76", "m78"],
+  m92: ["m79", "m80"],
+  m93: ["m83", "m84"],
+  m94: ["m81", "m82"],
+  m95: ["m86", "m88"],
+  m96: ["m85", "m87"],
+  m97: ["m89", "m90"],
+  m98: ["m93", "m94"],
+  m99: ["m91", "m92"],
+  m100: ["m95", "m96"],
+  m101: ["m97", "m98"],
+  m102: ["m99", "m100"],
+  m104: ["m101", "m102"],
+};
+const knockoutOrder = [
+  "m73",
+  "m74",
+  "m75",
+  "m76",
+  "m77",
+  "m78",
+  "m79",
+  "m80",
+  "m81",
+  "m82",
+  "m83",
+  "m84",
+  "m85",
+  "m86",
+  "m87",
+  "m88",
+  "m89",
+  "m90",
+  "m91",
+  "m92",
+  "m93",
+  "m94",
+  "m95",
+  "m96",
+  "m97",
+  "m98",
+  "m99",
+  "m100",
+  "m101",
+  "m102",
+  "m104",
+];
 
 function normalizePoolCode(value: string) {
   return value.trim().toLowerCase();
+}
+
+function firstRoundTeamIds(draft: BracketDraft) {
+  return Object.fromEntries(
+    firstRoundMatches(draft, teams).map((match) => [
+      match.id,
+      [match.home?.id, match.away?.id].filter((id): id is string => Boolean(id)),
+    ]),
+  ) as Record<string, string[]>;
+}
+
+function validTeamIdsForMatch(matchId: string, picks: Record<string, string>, firstRoundIds: Record<string, string[]>) {
+  const directTeams = firstRoundIds[matchId];
+  if (directTeams) return directTeams;
+  return (knockoutFeeders[matchId] ?? []).map((feederId) => picks[feederId]).filter(Boolean);
+}
+
+function normalizedKnockoutDraft(draft: BracketDraft) {
+  const firstRoundIds = firstRoundTeamIds(draft);
+  const knockoutPicks: Record<string, string> = {};
+
+  for (const matchId of knockoutOrder) {
+    const pick = draft.knockoutPicks[matchId];
+    if (!pick) continue;
+    const validTeamIds = validTeamIdsForMatch(matchId, knockoutPicks, firstRoundIds);
+    if (validTeamIds.includes(pick)) {
+      knockoutPicks[matchId] = pick;
+    }
+  }
+
+  const finalistIds = ["m101", "m102"].map((matchId) => knockoutPicks[matchId]).filter(Boolean);
+  const finalScorerValid =
+    !draft.finalScorer ||
+    finalistIds.some((teamId) => squadCandidatesForTeamId(teamId).some((player) => player.id === draft.finalScorer));
+
+  return {
+    ...draft,
+    knockoutPicks,
+    finalScorer: finalScorerValid ? draft.finalScorer : undefined,
+  };
 }
 
 function formatDeadline(value: string) {
@@ -95,17 +185,17 @@ function TeamFlag({ team, className = "" }: { team?: Team; className?: string })
 }
 
 function displayChampionPick(championPick: string | null, picks: unknown) {
-  const savedChampion =
-    picks && typeof picks === "object" && "knockoutPicks" in picks
-      ? (picks as BracketDraft).knockoutPicks?.m104
-      : undefined;
-  const teamId = savedChampion || championPick || "";
+  if (picks && typeof picks === "object" && "knockoutPicks" in picks) {
+    const savedChampion = normalizedKnockoutDraft(picks as BracketDraft).knockoutPicks?.m104;
+    return savedChampion ? teamById.get(savedChampion)?.name ?? savedChampion : "Incomplete";
+  }
+  const teamId = championPick || "";
   return teamById.get(teamId)?.name ?? teamId;
 }
 
 function mapRowsToEntries(rows: LeaderboardRow[], canOpenBrackets: boolean) {
   return rows.map((row, index) => {
-    const maybePicks = "picks" in row ? (row.picks as BracketDraft) : null;
+    const maybePicks = "picks" in row && row.picks ? normalizedKnockoutDraft(row.picks as BracketDraft) : null;
     return {
       rank: index + 1,
       displayName: row.display_name,
@@ -372,7 +462,7 @@ function BracketPool({ onSubmitted }: { onSubmitted: (entry: LeaderboardEntry) =
   const [draft, setDraft] = useState<BracketDraft>(() => {
     if (typeof window === "undefined") return emptyDraft();
     const saved = window.localStorage.getItem(draftStorageKey);
-    return saved ? (JSON.parse(saved) as BracketDraft) : emptyDraft();
+    return saved ? normalizedKnockoutDraft(JSON.parse(saved) as BracketDraft) : emptyDraft();
   });
   const [finalScoreText, setFinalScoreText] = useState(() => (draft.finalScore ? draft.finalScore.join("-") : ""));
   const [submitted, setSubmitted] = useState(false);
@@ -447,7 +537,7 @@ function BracketPool({ onSubmitted }: { onSubmitted: (entry: LeaderboardEntry) =
           .eq("user_id", data.user.id)
           .maybeSingle();
         if (existingBracket?.picks) {
-          const savedDraft = existingBracket.picks as BracketDraft;
+          const savedDraft = normalizedKnockoutDraft(existingBracket.picks as BracketDraft);
           setDraft(savedDraft);
           setFinalScoreText(savedDraft.finalScore ? savedDraft.finalScore.join("-") : "");
           setSubmitted(true);
@@ -506,7 +596,12 @@ function BracketPool({ onSubmitted }: { onSubmitted: (entry: LeaderboardEntry) =
 
   const pickWinner = (matchId: string, teamId: string) => {
     if (locked) return;
-    setDraft((current) => ({ ...current, knockoutPicks: { ...current.knockoutPicks, [matchId]: teamId } }));
+    setDraft((current) =>
+      normalizedKnockoutDraft({
+        ...current,
+        knockoutPicks: { ...current.knockoutPicks, [matchId]: teamId },
+      }),
+    );
   };
 
   const fillModelPicks = () => {
@@ -575,15 +670,16 @@ function BracketPool({ onSubmitted }: { onSubmitted: (entry: LeaderboardEntry) =
         await signIn();
         return;
       }
+      const draftToSubmit = normalizedKnockoutDraft(draft);
       const displayName = data.user.user_metadata?.full_name || data.user.email?.split("@")[0] || "Player";
-      const championPick = draftChampion(draft) ?? "";
+      const championPick = draftChampion(draftToSubmit) ?? "";
       const { error } = await supabase.from("brackets").insert({
         user_id: data.user.id,
         display_name: displayName,
-        picks: draft,
+        picks: draftToSubmit,
         champion_pick: championPick,
-        final_goalscorer_pick: draft.finalScorer,
-        final_score: draft.finalScore?.join("-") ?? null,
+        final_goalscorer_pick: draftToSubmit.finalScorer,
+        final_score: draftToSubmit.finalScore?.join("-") ?? null,
       });
       if (error) {
         if (error.message.toLowerCase().includes("duplicate")) {
@@ -674,16 +770,17 @@ function BracketPool({ onSubmitted }: { onSubmitted: (entry: LeaderboardEntry) =
       await signIn();
       return;
     }
-    const championPick = draftChampion(draft) ?? "";
+    const draftToSave = normalizedKnockoutDraft(draft);
+    const championPick = draftChampion(draftToSave) ?? "";
     setSubmitting(true);
     try {
       const { error } = await supabase
         .from("brackets")
         .update({
-          picks: draft,
+          picks: draftToSave,
           champion_pick: championPick,
-          final_goalscorer_pick: draft.finalScorer,
-          final_score: draft.finalScore.join("-"),
+          final_goalscorer_pick: draftToSave.finalScorer,
+          final_score: draftToSave.finalScore?.join("-") ?? null,
         })
         .eq("user_id", data.user.id);
 
@@ -691,7 +788,7 @@ function BracketPool({ onSubmitted }: { onSubmitted: (entry: LeaderboardEntry) =
         setSubmitStatus(`${error.message}. If this mentions policy/RLS, run the admin correction SQL I gave you.`);
         return;
       }
-      window.localStorage.setItem(draftStorageKey, JSON.stringify(draft));
+      window.localStorage.setItem(draftStorageKey, JSON.stringify(draftToSave));
       setCorrectionMode(false);
       setSubmitted(true);
       setSubmitStatus("Your official bracket was corrected and locked.");
@@ -1456,7 +1553,7 @@ function Leaderboard({ localEntry }: { localEntry: LeaderboardEntry | null }) {
 }
 
 function BracketPreviewPage({ entry, onBack }: { entry: ViewableLeaderboardEntry; onBack: () => void }) {
-  const picks = entry.picks;
+  const picks = entry.picks ? normalizedKnockoutDraft(entry.picks) : null;
   if (!picks) return null;
   const champion = draftChampion(picks);
   const selectedKnockouts = Object.entries(picks.knockoutPicks).filter(([, teamId]) => Boolean(teamId));
