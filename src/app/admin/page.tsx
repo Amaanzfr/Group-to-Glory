@@ -48,7 +48,8 @@ export default async function AdminPage({ searchParams }: { searchParams?: Promi
               Refresh data now
             </button>
           </form>
-          <form action="/api/admin/score" method="post">
+          <form action="/api/admin/score" method="post" className="flex flex-wrap gap-2">
+            <input name="adminSecret" type="password" placeholder="Admin secret" className="h-10 rounded-md border border-stone-300 bg-white px-3 text-sm" />
             <button className="inline-flex h-10 items-center gap-2 rounded-md border border-stone-300 bg-white px-3 text-sm font-bold">
               <BarChart3 className="h-4 w-4" />
               Recalculate scores

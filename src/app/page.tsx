@@ -34,11 +34,13 @@ type ViewableLeaderboardEntry = LeaderboardEntry & {
   submittedAt?: string;
 };
 type LeaderboardRow = {
+  id?: number;
   display_name: string;
   champion_pick: string;
   picks?: BracketDraft | null;
   submitted_at: string;
   private_pool_code?: string | null;
+  leaderboard_scores?: { points: number; rank: number | null } | Array<{ points: number; rank: number | null }> | null;
 };
 
 const teamById = new Map(teams.map((team) => [team.id, team]));
@@ -194,17 +196,20 @@ function displayChampionPick(championPick: string | null, picks: unknown) {
 }
 
 function mapRowsToEntries(rows: LeaderboardRow[], canOpenBrackets: boolean) {
-  return rows.map((row, index) => {
+  return rows
+    .map((row, index) => {
     const maybePicks = "picks" in row && row.picks ? normalizedKnockoutDraft(row.picks as BracketDraft) : null;
+    const score = Array.isArray(row.leaderboard_scores) ? row.leaderboard_scores[0] : row.leaderboard_scores;
     return {
-      rank: index + 1,
+      rank: score?.rank ?? index + 1,
       displayName: row.display_name,
-      points: 0,
+      points: score?.points ?? 0,
       championPick: displayChampionPick(row.champion_pick, maybePicks),
       picks: canOpenBrackets ? maybePicks : null,
       submittedAt: row.submitted_at,
     };
-  });
+  })
+    .sort((a, b) => b.points - a.points || a.rank - b.rank);
 }
 
 function championTeamFromPick(championPick: string) {
@@ -1310,12 +1315,12 @@ function Leaderboard({ localEntry }: { localEntry: LeaderboardEntry | null }) {
     const result = canOpenBrackets
       ? await supabase
           .from("brackets")
-          .select("display_name, champion_pick, picks, submitted_at, private_pool_code")
+          .select("id, display_name, champion_pick, picks, submitted_at, private_pool_code, leaderboard_scores(points, rank)")
           .eq("private_pool_code", code)
           .order("submitted_at", { ascending: true })
       : await supabase
           .from("brackets")
-          .select("display_name, champion_pick, submitted_at, private_pool_code")
+          .select("id, display_name, champion_pick, submitted_at, private_pool_code, leaderboard_scores(points, rank)")
           .eq("private_pool_code", code)
           .order("submitted_at", { ascending: true });
 
@@ -1401,8 +1406,8 @@ function Leaderboard({ localEntry }: { localEntry: LeaderboardEntry | null }) {
       }
 
       const result = canOpenBrackets
-        ? await supabase.from("brackets").select("display_name, champion_pick, picks, submitted_at").order("submitted_at", { ascending: true })
-        : await supabase.from("brackets").select("display_name, champion_pick, submitted_at").order("submitted_at", { ascending: true });
+        ? await supabase.from("brackets").select("id, display_name, champion_pick, picks, submitted_at, leaderboard_scores(points, rank)").order("submitted_at", { ascending: true })
+        : await supabase.from("brackets").select("id, display_name, champion_pick, submitted_at, leaderboard_scores(points, rank)").order("submitted_at", { ascending: true });
       const data = result.data as LeaderboardRow[] | null;
       const error = result.error;
 
