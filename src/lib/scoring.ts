@@ -50,36 +50,62 @@ export const advancingThirdPlaceTeamIds = new Set([
 
 const groupSlots = ["first", "second", "third", "fourth"] as const;
 
+export function groupScoreDetails(draft: BracketDraft) {
+  return (Object.entries(finalGroupStandings) as Array<[GroupId, [string, string, string, string]]>).map(([group, actualOrder]) => {
+    const pick = draft.groupPicks[group];
+    const pickedOrder = groupSlots.map((slot) => pick?.[slot] ?? "");
+    const perfect = pickedOrder.every((teamId, index) => teamId === actualOrder[index]);
+    const pickedTopTwo = new Set([pick?.first, pick?.second].filter(Boolean));
+    const actualTopTwo = new Set(actualOrder.slice(0, 2));
+    const topTwoCorrect = pickedTopTwo.size === 2 && [...actualTopTwo].every((teamId) => pickedTopTwo.has(teamId));
+    const actualThird = actualOrder[2];
+    const thirdAdvancerCorrect =
+      pick?.third === actualThird &&
+      advancingThirdPlaceTeamIds.has(actualThird) &&
+      draft.thirdPlaceAdvancers.includes(actualThird);
+    const points = (perfect ? 4 : topTwoCorrect ? 2 : 0) + (thirdAdvancerCorrect ? 1 : 0);
+
+    return {
+      group,
+      actualOrder,
+      pickedOrder,
+      perfect,
+      topTwoCorrect,
+      thirdAdvancerCorrect,
+      points,
+      possiblePoints: 4 + (advancingThirdPlaceTeamIds.has(actualThird) ? 1 : 0),
+    };
+  });
+}
+
+export function knockoutScoreDetails(draft: BracketDraft) {
+  return completedKnockoutResults.map((result) => {
+    const pickedTeamId = draft.knockoutPicks[result.matchId];
+    const points = pickedTeamId === result.winnerTeamId ? stagePoints[result.stage] : 0;
+
+    return {
+      ...result,
+      pickedTeamId,
+      points,
+      possiblePoints: stagePoints[result.stage],
+    };
+  });
+}
+
 function scoreGroups(draft: BracketDraft) {
   let points = 0;
   let correctTopTwoGroups = 0;
   let perfectGroups = 0;
   let correctThirdAdvancers = 0;
 
-  for (const [group, actualOrder] of Object.entries(finalGroupStandings) as Array<[GroupId, [string, string, string, string]]>) {
-    const pick = draft.groupPicks[group];
-    const pickedOrder = groupSlots.map((slot) => pick?.[slot] ?? "");
-    const perfect = pickedOrder.every((teamId, index) => teamId === actualOrder[index]);
-
-    if (perfect) {
-      points += 4;
+  for (const detail of groupScoreDetails(draft)) {
+    points += detail.points;
+    if (detail.perfect) {
       perfectGroups += 1;
-    } else {
-      const pickedTopTwo = new Set([pick?.first, pick?.second].filter(Boolean));
-      const actualTopTwo = new Set(actualOrder.slice(0, 2));
-      if (pickedTopTwo.size === 2 && [...actualTopTwo].every((teamId) => pickedTopTwo.has(teamId))) {
-        points += 2;
-        correctTopTwoGroups += 1;
-      }
+    } else if (detail.topTwoCorrect) {
+      correctTopTwoGroups += 1;
     }
-
-    const actualThird = actualOrder[2];
-    if (
-      pick?.third === actualThird &&
-      advancingThirdPlaceTeamIds.has(actualThird) &&
-      draft.thirdPlaceAdvancers.includes(actualThird)
-    ) {
-      points += 1;
+    if (detail.thirdAdvancerCorrect) {
       correctThirdAdvancers += 1;
     }
   }
@@ -94,13 +120,14 @@ function scoreGroups(draft: BracketDraft) {
 }
 
 export function scoreBracket(draft: BracketDraft) {
-  const correctPicks = completedKnockoutResults.filter((result) => draft.knockoutPicks[result.matchId] === result.winnerTeamId);
-  const knockoutPoints = correctPicks.reduce((total, result) => total + stagePoints[result.stage], 0);
+  const knockoutDetails = knockoutScoreDetails(draft);
+  const correctPicks = knockoutDetails.filter((result) => result.points > 0);
+  const knockoutPoints = knockoutDetails.reduce((total, result) => total + result.points, 0);
   const groupScore = scoreGroups(draft);
 
   return {
     points: groupScore.points + knockoutPoints,
-    possiblePoints: groupScore.possiblePoints + completedKnockoutResults.reduce((total, result) => total + stagePoints[result.stage], 0),
+    possiblePoints: groupScore.possiblePoints + knockoutDetails.reduce((total, result) => total + result.possiblePoints, 0),
     groupPoints: groupScore.points,
     knockoutPoints,
     perfectGroups: groupScore.perfectGroups,

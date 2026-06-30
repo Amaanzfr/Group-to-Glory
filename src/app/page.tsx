@@ -17,6 +17,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { canBuildBracket, draftChampion, emptyDraft, firstRoundMatches, groupIds, groupTeams } from "@/lib/bracket-engine";
 import { predictMatch, modelChampion } from "@/lib/prediction-model";
 import { squadCandidatesForTeamId } from "@/lib/squad-candidates";
+import { groupScoreDetails, knockoutScoreDetails, scoreBracket } from "@/lib/scoring";
 import { createSupabaseBrowserClient } from "@/lib/supabase";
 import { amaanWinnerId, dataUpdatedIso, deadlineIso, fixtures, leaderboard, teams } from "@/lib/tournament-data";
 import type { BracketDraft, GroupId, LeaderboardEntry, Prediction, Team } from "@/lib/types";
@@ -1561,7 +1562,9 @@ function BracketPreviewPage({ entry, onBack }: { entry: ViewableLeaderboardEntry
   const picks = entry.picks ? normalizedKnockoutDraft(entry.picks) : null;
   if (!picks) return null;
   const champion = draftChampion(picks);
-  const selectedKnockouts = Object.entries(picks.knockoutPicks).filter(([, teamId]) => Boolean(teamId));
+  const score = scoreBracket(picks);
+  const groupDetails = groupScoreDetails(picks);
+  const knockoutDetails = knockoutScoreDetails(picks);
 
   return (
     <section className="w-full overflow-hidden rounded-lg border border-stone-200 bg-stone-50 p-4 shadow-2xl">
@@ -1579,20 +1582,52 @@ function BracketPreviewPage({ entry, onBack }: { entry: ViewableLeaderboardEntry
           </button>
         </div>
 
+        <div className="mt-4 grid gap-3 md:grid-cols-4">
+          <Metric label="Total points" value={`${score.points}/${score.possiblePoints}`} strong />
+          <Metric label="Group points" value={`${score.groupPoints}`} />
+          <Metric label="Knockout points" value={`${score.knockoutPoints}`} />
+          <Metric label="Correct KO picks" value={`${score.correctPicks}/${score.completedMatches}`} />
+        </div>
+
+        <div className="mt-4 flex flex-wrap gap-2 text-xs font-black">
+          <span className="rounded-full border border-emerald-500/40 bg-emerald-100 px-3 py-1 text-emerald-900">Green = full credit</span>
+          <span className="rounded-full border border-amber-500/40 bg-amber-50 px-3 py-1 text-amber-200">Yellow = partial credit</span>
+          <span className="rounded-full border border-red-500/40 bg-red-950/40 px-3 py-1 text-red-100">Red = missed</span>
+        </div>
+
         <div className="mt-4 grid min-w-0 gap-4 xl:grid-cols-2">
           <div className="min-w-0">
             <h3 className="text-sm font-black uppercase tracking-wide text-stone-500">Group picks</h3>
             <div className="mt-3 grid min-w-0 gap-2 md:grid-cols-2">
-              {groupIds.map((group) => {
-                const pick = picks.groupPicks[group];
+              {groupDetails.map((detail) => {
+                const statusClass = detail.perfect
+                  ? "border-emerald-500/60 bg-emerald-100"
+                  : detail.topTwoCorrect || detail.thirdAdvancerCorrect
+                    ? "border-amber-400/60 bg-amber-50"
+                    : "border-red-500/40 bg-red-950/30";
                 return (
-                  <div key={group} className="min-w-0 rounded-md border border-stone-200 bg-white p-3">
-                    <p className="mb-2 text-xs font-black uppercase tracking-wide text-stone-500">Group {group}</p>
-                    {(["first", "second", "third", "fourth"] as const).map((slot, index) => (
-                      <p key={slot} className="text-sm font-bold">
-                        {index + 1}. <TeamLabel team={teamById.get(pick[slot] ?? "")} />
+                  <div key={detail.group} className={`min-w-0 rounded-md border p-3 ${statusClass}`}>
+                    <div className="mb-2 flex items-center justify-between gap-2">
+                      <p className="text-xs font-black uppercase tracking-wide text-stone-500">Group {detail.group}</p>
+                      <span className="rounded-full bg-white/20 px-2 py-1 text-xs font-black">{detail.points}/{detail.possiblePoints}</span>
+                    </div>
+                    {detail.pickedOrder.map((teamId, index) => {
+                      const exact = teamId === detail.actualOrder[index];
+                      const topTwoTeam = index < 2 && detail.actualOrder.slice(0, 2).includes(teamId);
+                      const thirdBonus = index === 2 && detail.thirdAdvancerCorrect;
+                      const marker = exact ? "✓" : topTwoTeam || thirdBonus ? "~" : "×";
+                      return (
+                        <p key={`${detail.group}-${index}`} className="flex items-center justify-between gap-2 text-sm font-bold">
+                          <span>{index + 1}. <TeamLabel team={teamById.get(teamId)} /></span>
+                          <span className="text-xs">{marker}</span>
+                        </p>
+                      );
+                    })}
+                    <p className="mt-2 text-xs font-bold text-stone-500">
+                      Actual: {detail.actualOrder.map((teamId, index) => (
+                        <span key={teamId}>{index ? ", " : ""}{index + 1}. {teamById.get(teamId)?.name ?? teamId}</span>
+                      ))}
                       </p>
-                    ))}
                   </div>
                 );
               })}
@@ -1600,14 +1635,21 @@ function BracketPreviewPage({ entry, onBack }: { entry: ViewableLeaderboardEntry
           </div>
 
           <div className="min-w-0">
-            <h3 className="text-sm font-black uppercase tracking-wide text-stone-500">Knockout winners</h3>
+            <h3 className="text-sm font-black uppercase tracking-wide text-stone-500">Completed knockout picks</h3>
             <div className="mt-3 grid min-w-0 gap-2 md:grid-cols-2">
-              {selectedKnockouts.map(([matchId, teamId]) => (
-                <div key={matchId} className="min-w-0 rounded-md border border-stone-200 bg-white p-3">
-                  <p className="text-xs font-black uppercase tracking-wide text-stone-500">{matchId.replace("m", "Match ")}</p>
-                  <p className="mt-1 text-sm font-bold"><TeamLabel team={teamById.get(teamId)} /></p>
-                </div>
-              ))}
+              {knockoutDetails.map((detail) => {
+                const hit = detail.points > 0;
+                return (
+                  <div key={detail.matchId} className={`min-w-0 rounded-md border p-3 ${hit ? "border-emerald-500/60 bg-emerald-100" : "border-red-500/40 bg-red-950/30"}`}>
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-xs font-black uppercase tracking-wide text-stone-500">{detail.matchId.replace("m", "Match ")}</p>
+                      <span className="rounded-full bg-white/20 px-2 py-1 text-xs font-black">{detail.points}/{detail.possiblePoints}</span>
+                    </div>
+                    <p className="mt-2 text-sm font-bold">Pick: <TeamLabel team={teamById.get(detail.pickedTeamId ?? "")} /></p>
+                    <p className="mt-1 text-xs font-bold text-stone-500">Winner: {teamById.get(detail.winnerTeamId)?.name ?? detail.winnerTeamId}</p>
+                  </div>
+                );
+              })}
             </div>
           </div>
         </div>
