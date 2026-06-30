@@ -1565,6 +1565,28 @@ function BracketPreviewPage({ entry, onBack }: { entry: ViewableLeaderboardEntry
   const score = scoreBracket(picks);
   const groupDetails = groupScoreDetails(picks);
   const knockoutDetails = knockoutScoreDetails(picks);
+  const teamFromPick = (matchId: string) => teamById.get(picks.knockoutPicks[matchId]);
+  const r32Matches = firstRoundMatches(picks, teams);
+  const allKnockoutMatches = [
+    ...r32Matches,
+    { id: "m89", label: "Match 89", date: "Sat 4 Jul", venue: "Philadelphia Stadium", home: teamFromPick("m74"), away: teamFromPick("m77") },
+    { id: "m90", label: "Match 90", date: "Sat 4 Jul", venue: "Houston Stadium", home: teamFromPick("m73"), away: teamFromPick("m75") },
+    { id: "m91", label: "Match 91", date: "Sun 5 Jul", venue: "New York New Jersey Stadium", home: teamFromPick("m76"), away: teamFromPick("m78") },
+    { id: "m92", label: "Match 92", date: "Sun 5 Jul", venue: "Mexico City Stadium", home: teamFromPick("m79"), away: teamFromPick("m80") },
+    { id: "m93", label: "Match 93", date: "Mon 6 Jul", venue: "Dallas Stadium", home: teamFromPick("m83"), away: teamFromPick("m84") },
+    { id: "m94", label: "Match 94", date: "Mon 6 Jul", venue: "Seattle Stadium", home: teamFromPick("m81"), away: teamFromPick("m82") },
+    { id: "m95", label: "Match 95", date: "Tue 7 Jul", venue: "Atlanta Stadium", home: teamFromPick("m86"), away: teamFromPick("m88") },
+    { id: "m96", label: "Match 96", date: "Tue 7 Jul", venue: "BC Place Vancouver", home: teamFromPick("m85"), away: teamFromPick("m87") },
+    { id: "m97", label: "Match 97", date: "Thu 9 Jul", venue: "Boston Stadium", home: teamFromPick("m89"), away: teamFromPick("m90") },
+    { id: "m98", label: "Match 98", date: "Fri 10 Jul", venue: "Los Angeles Stadium", home: teamFromPick("m93"), away: teamFromPick("m94") },
+    { id: "m99", label: "Match 99", date: "Sat 11 Jul", venue: "Miami Stadium", home: teamFromPick("m91"), away: teamFromPick("m92") },
+    { id: "m100", label: "Match 100", date: "Sat 11 Jul", venue: "Kansas City Stadium", home: teamFromPick("m95"), away: teamFromPick("m96") },
+    { id: "m101", label: "Match 101", date: "Tue 14 Jul", venue: "Dallas Stadium", home: teamFromPick("m97"), away: teamFromPick("m98") },
+    { id: "m102", label: "Match 102", date: "Wed 15 Jul", venue: "Atlanta Stadium", home: teamFromPick("m99"), away: teamFromPick("m100") },
+    { id: "m104", label: "Match 104", date: "Sun 19 Jul", venue: "New York New Jersey Stadium", home: teamFromPick("m101"), away: teamFromPick("m102") },
+  ];
+  const completedMatchIds = new Set(knockoutDetails.map((detail) => detail.matchId));
+  const futureKnockoutPicks = allKnockoutMatches.filter((match) => picks.knockoutPicks[match.id] && !completedMatchIds.has(match.id));
 
   return (
     <section className="w-full overflow-hidden rounded-lg border border-stone-200 bg-stone-50 p-4 shadow-2xl">
@@ -1602,7 +1624,7 @@ function BracketPreviewPage({ entry, onBack }: { entry: ViewableLeaderboardEntry
               {groupDetails.map((detail) => {
                 const statusClass = detail.perfect
                   ? "border-emerald-500/60 bg-emerald-100"
-                  : detail.topTwoCorrect || detail.thirdAdvancerCorrect
+                  : detail.topTwoCorrect || detail.firstPlaceCorrect || detail.thirdAdvancerCorrect
                     ? "border-amber-400/60 bg-amber-50"
                     : "border-red-500/40 bg-red-950/30";
                 return (
@@ -1614,8 +1636,9 @@ function BracketPreviewPage({ entry, onBack }: { entry: ViewableLeaderboardEntry
                     {detail.pickedOrder.map((teamId, index) => {
                       const exact = teamId === detail.actualOrder[index];
                       const topTwoTeam = index < 2 && detail.actualOrder.slice(0, 2).includes(teamId);
+                      const firstPlaceHit = index === 0 && detail.firstPlaceCorrect;
                       const thirdBonus = index === 2 && detail.thirdAdvancerCorrect;
-                      const marker = exact ? "✓" : topTwoTeam || thirdBonus ? "~" : "×";
+                      const marker = exact ? "✓" : topTwoTeam || firstPlaceHit || thirdBonus ? "~" : "×";
                       return (
                         <p key={`${detail.group}-${index}`} className="flex items-center justify-between gap-2 text-sm font-bold">
                           <span>{index + 1}. <TeamLabel team={teamById.get(teamId)} /></span>
@@ -1639,17 +1662,36 @@ function BracketPreviewPage({ entry, onBack }: { entry: ViewableLeaderboardEntry
             <div className="mt-3 grid min-w-0 gap-2 md:grid-cols-2">
               {knockoutDetails.map((detail) => {
                 const hit = detail.points > 0;
+                const match = allKnockoutMatches.find((item) => item.id === detail.matchId);
                 return (
                   <div key={detail.matchId} className={`min-w-0 rounded-md border p-3 ${hit ? "border-emerald-500/60 bg-emerald-100" : "border-red-500/40 bg-red-950/30"}`}>
                     <div className="flex items-center justify-between gap-2">
                       <p className="text-xs font-black uppercase tracking-wide text-stone-500">{detail.matchId.replace("m", "Match ")}</p>
                       <span className="rounded-full bg-white/20 px-2 py-1 text-xs font-black">{detail.points}/{detail.possiblePoints}</span>
                     </div>
+                    <p className="mt-1 text-xs font-bold text-stone-500">
+                      <TeamLabel team={match?.home} /> <span className="px-1">vs</span> <TeamLabel team={match?.away} />
+                    </p>
                     <p className="mt-2 text-sm font-bold">Pick: <TeamLabel team={teamById.get(detail.pickedTeamId ?? "")} /></p>
                     <p className="mt-1 text-xs font-bold text-stone-500">Winner: {teamById.get(detail.winnerTeamId)?.name ?? detail.winnerTeamId}</p>
                   </div>
                 );
               })}
+            </div>
+            <h3 className="mt-5 text-sm font-black uppercase tracking-wide text-stone-500">Future knockout picks</h3>
+            <div className="mt-3 grid min-w-0 gap-2 md:grid-cols-2">
+              {futureKnockoutPicks.map((match) => (
+                <div key={match.id} className="min-w-0 rounded-md border border-stone-200 bg-white p-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-xs font-black uppercase tracking-wide text-stone-500">{match.label}</p>
+                    <span className="rounded-full bg-stone-100 px-2 py-1 text-xs font-black text-stone-500">Pending</span>
+                  </div>
+                  <p className="mt-1 text-xs font-bold text-stone-500">
+                    <TeamLabel team={match.home} /> <span className="px-1">vs</span> <TeamLabel team={match.away} />
+                  </p>
+                  <p className="mt-2 text-sm font-bold">Pick: <TeamLabel team={teamById.get(picks.knockoutPicks[match.id])} /></p>
+                </div>
+              ))}
             </div>
           </div>
         </div>

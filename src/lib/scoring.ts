@@ -59,11 +59,13 @@ export function groupScoreDetails(draft: BracketDraft) {
     const actualTopTwo = new Set(actualOrder.slice(0, 2));
     const topTwoCorrect = pickedTopTwo.size === 2 && [...actualTopTwo].every((teamId) => pickedTopTwo.has(teamId));
     const actualThird = actualOrder[2];
+    const firstPlaceCorrect = pick?.first === actualOrder[0];
     const thirdAdvancerCorrect =
       pick?.third === actualThird &&
       advancingThirdPlaceTeamIds.has(actualThird) &&
       draft.thirdPlaceAdvancers.includes(actualThird);
-    const points = (perfect ? 4 : topTwoCorrect ? 2 : 0) + (thirdAdvancerCorrect ? 1 : 0);
+    const placementPoints = perfect ? 4 : topTwoCorrect ? 2 : firstPlaceCorrect ? 1 : 0;
+    const points = placementPoints + (thirdAdvancerCorrect ? 1 : 0);
 
     return {
       group,
@@ -71,6 +73,7 @@ export function groupScoreDetails(draft: BracketDraft) {
       pickedOrder,
       perfect,
       topTwoCorrect,
+      firstPlaceCorrect,
       thirdAdvancerCorrect,
       points,
       possiblePoints: 4 + (advancingThirdPlaceTeamIds.has(actualThird) ? 1 : 0),
