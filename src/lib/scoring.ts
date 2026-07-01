@@ -22,6 +22,14 @@ export const completedKnockoutResults: CompletedKnockoutResult[] = [
   { matchId: "m76", winnerTeamId: "brazil", stage: "roundOf32" },
 ];
 
+export function mergeCompletedResults(extraResults: CompletedKnockoutResult[]) {
+  const byMatch = new Map(completedKnockoutResults.map((result) => [result.matchId, result]));
+  for (const result of extraResults) {
+    byMatch.set(result.matchId, result);
+  }
+  return [...byMatch.values()].sort((a, b) => Number(a.matchId.slice(1)) - Number(b.matchId.slice(1)));
+}
+
 export const finalGroupStandings: Record<GroupId, [string, string, string, string]> = {
   A: ["mexico", "south-africa", "south-korea", "czechia"],
   B: ["switzerland", "canada", "bosnia-and-herzegovina", "qatar"],
@@ -81,8 +89,8 @@ export function groupScoreDetails(draft: BracketDraft) {
   });
 }
 
-export function knockoutScoreDetails(draft: BracketDraft) {
-  return completedKnockoutResults.map((result) => {
+export function knockoutScoreDetails(draft: BracketDraft, results = completedKnockoutResults) {
+  return results.map((result) => {
     const pickedTeamId = draft.knockoutPicks[result.matchId];
     const points = pickedTeamId === result.winnerTeamId ? stagePoints[result.stage] : 0;
 
@@ -122,8 +130,8 @@ function scoreGroups(draft: BracketDraft) {
   };
 }
 
-export function scoreBracket(draft: BracketDraft) {
-  const knockoutDetails = knockoutScoreDetails(draft);
+export function scoreBracket(draft: BracketDraft, results = completedKnockoutResults) {
+  const knockoutDetails = knockoutScoreDetails(draft, results);
   const correctPicks = knockoutDetails.filter((result) => result.points > 0);
   const knockoutPoints = knockoutDetails.reduce((total, result) => total + result.points, 0);
   const groupScore = scoreGroups(draft);

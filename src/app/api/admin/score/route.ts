@@ -1,6 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
-import { scoreBracket } from "@/lib/scoring";
+import { mergeCompletedResults, scoreBracket, type CompletedKnockoutResult } from "@/lib/scoring";
 import type { BracketDraft } from "@/lib/types";
 
 type BracketScoreRow = {
@@ -40,10 +40,29 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
+  const { data: resultRows, error: resultError } = await supabase
+    .from("match_results")
+    .select("match_id, winner_team_id, stage")
+    .eq("status", "completed");
+
+  if (resultError && !resultError.message.includes("match_results")) {
+    return NextResponse.json({ error: resultError.message }, { status: 500 });
+  }
+
+  const results = mergeCompletedResults(
+    resultRows?.length
+      ? (resultRows.map((row) => ({
+          matchId: row.match_id,
+          winnerTeamId: row.winner_team_id,
+          stage: row.stage,
+        })) as CompletedKnockoutResult[])
+      : [],
+  );
+
   const scored = ((data ?? []) as BracketScoreRow[])
     .map((row) => ({
       bracket_id: row.id,
-      ...scoreBracket(row.picks),
+      ...scoreBracket(row.picks, results),
       submittedAt: row.submitted_at,
     }))
     .sort((a, b) => b.points - a.points || new Date(a.submittedAt).getTime() - new Date(b.submittedAt).getTime());

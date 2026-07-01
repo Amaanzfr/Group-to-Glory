@@ -1,6 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import { existsSync, readFileSync } from "node:fs";
-import { scoreBracket } from "../src/lib/scoring";
+import { mergeCompletedResults, scoreBracket, type CompletedKnockoutResult } from "../src/lib/scoring";
 import type { BracketDraft } from "../src/lib/types";
 
 type BracketScoreRow = {
@@ -43,10 +43,26 @@ async function main() {
 
   if (error) throw error;
 
+  const { data: resultRows, error: resultError } = await supabase
+    .from("match_results")
+    .select("match_id, winner_team_id, stage")
+    .eq("status", "completed");
+  if (resultError && !resultError.message.includes("match_results")) throw resultError;
+
+  const results = mergeCompletedResults(
+    resultRows?.length
+      ? (resultRows.map((row) => ({
+          matchId: row.match_id,
+          winnerTeamId: row.winner_team_id,
+          stage: row.stage,
+        })) as CompletedKnockoutResult[])
+      : [],
+  );
+
   const scored = ((data ?? []) as BracketScoreRow[])
     .map((row) => ({
       bracket_id: row.id,
-      ...scoreBracket(row.picks),
+      ...scoreBracket(row.picks, results),
       submittedAt: row.submitted_at,
     }))
     .sort((a, b) => b.points - a.points || new Date(a.submittedAt).getTime() - new Date(b.submittedAt).getTime());

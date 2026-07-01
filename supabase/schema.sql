@@ -36,13 +36,27 @@ create table if not exists public.leaderboard_scores (
   updated_at timestamptz not null default now()
 );
 
+create table if not exists public.match_results (
+  match_id text primary key,
+  winner_team_id text not null,
+  stage text not null,
+  status text not null default 'completed',
+  completed_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
 alter table public.profiles enable row level security;
 alter table public.brackets enable row level security;
 alter table public.leaderboard_scores enable row level security;
+alter table public.match_results enable row level security;
 alter table public.data_snapshots enable row level security;
 
 create policy "Public leaderboard scores are readable"
   on public.leaderboard_scores for select
+  using (true);
+
+create policy "Public match results are readable"
+  on public.match_results for select
   using (true);
 
 create policy "Users can read their own bracket"

@@ -1,11 +1,21 @@
 import { BarChart3, Database, RefreshCw, ShieldCheck } from "lucide-react";
 import { sportsProviderLabels } from "@/lib/server-config";
-import { dataUpdatedIso, deadlineIso } from "@/lib/tournament-data";
+import { dataUpdatedIso, deadlineIso, teams } from "@/lib/tournament-data";
 
-export default async function AdminPage({ searchParams }: { searchParams?: Promise<{ unlock?: string }> }) {
+const knockoutMatchOptions = [
+  ...Array.from({ length: 16 }, (_, index) => ({ id: `m${73 + index}`, label: `Match ${73 + index}`, stage: "roundOf32" })),
+  ...Array.from({ length: 8 }, (_, index) => ({ id: `m${89 + index}`, label: `Match ${89 + index}`, stage: "roundOf16" })),
+  ...Array.from({ length: 4 }, (_, index) => ({ id: `m${97 + index}`, label: `Match ${97 + index}`, stage: "quarterfinal" })),
+  { id: "m101", label: "Match 101", stage: "semifinal" },
+  { id: "m102", label: "Match 102", stage: "semifinal" },
+  { id: "m104", label: "Match 104", stage: "final" },
+];
+
+export default async function AdminPage({ searchParams }: { searchParams?: Promise<{ unlock?: string; result?: string }> }) {
   const providers = sportsProviderLabels();
   const params = await searchParams;
   const unlockMessage = params?.unlock;
+  const resultMessage = params?.result;
 
   return (
     <main className="mx-auto max-w-5xl px-4 py-8">
@@ -41,6 +51,7 @@ export default async function AdminPage({ searchParams }: { searchParams?: Promi
       <div className="mt-5 rounded-lg border border-stone-200 bg-white p-5 shadow-sm">
         <h2 className="text-lg font-black">Emergency controls</h2>
         {unlockMessage ? <p className="mt-3 rounded-md bg-stone-100 px-3 py-2 text-sm font-bold text-stone-700">{unlockMessage}</p> : null}
+        {resultMessage ? <p className="mt-3 rounded-md bg-stone-100 px-3 py-2 text-sm font-bold text-stone-700">{resultMessage}</p> : null}
         <div className="mt-4 flex flex-wrap gap-2">
           <form action="/api/admin/refresh" method="post">
             <button className="inline-flex h-10 items-center gap-2 rounded-md bg-emerald-800 px-3 text-sm font-bold text-white">
@@ -53,6 +64,37 @@ export default async function AdminPage({ searchParams }: { searchParams?: Promi
             <button className="inline-flex h-10 items-center gap-2 rounded-md border border-stone-300 bg-white px-3 text-sm font-bold">
               <BarChart3 className="h-4 w-4" />
               Recalculate scores
+            </button>
+          </form>
+        </div>
+        <div className="mt-5 rounded-md border border-emerald-200 bg-emerald-50 p-4">
+          <h3 className="text-base font-black">Add completed knockout result</h3>
+          <p className="mt-1 text-sm font-semibold text-stone-600">
+            Save the winner here, then hit Recalculate scores. This avoids code changes for every completed match.
+          </p>
+          <form action="/api/admin/result" method="post" className="mt-4 grid gap-3 md:grid-cols-[1fr_1fr_1fr_auto]">
+            <label className="grid gap-1">
+              <span className="text-xs font-black uppercase tracking-wide text-stone-500">Match</span>
+              <select name="matchId" required className="h-10 rounded-md border border-stone-300 bg-white px-3 text-sm">
+                {knockoutMatchOptions.map((match) => (
+                  <option key={match.id} value={match.id}>{match.label}</option>
+                ))}
+              </select>
+            </label>
+            <label className="grid gap-1">
+              <span className="text-xs font-black uppercase tracking-wide text-stone-500">Winner</span>
+              <select name="winnerTeamId" required className="h-10 rounded-md border border-stone-300 bg-white px-3 text-sm">
+                {teams.map((team) => (
+                  <option key={team.id} value={team.id}>{team.name}</option>
+                ))}
+              </select>
+            </label>
+            <label className="grid gap-1">
+              <span className="text-xs font-black uppercase tracking-wide text-stone-500">Admin secret</span>
+              <input name="adminSecret" required type="password" placeholder="ADMIN_ACTION_SECRET" className="h-10 rounded-md border border-stone-300 bg-white px-3 text-sm" />
+            </label>
+            <button className="mt-5 inline-flex h-10 items-center justify-center rounded-md bg-emerald-500 px-3 text-sm font-black text-stone-950">
+              Save result
             </button>
           </form>
         </div>

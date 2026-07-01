@@ -17,7 +17,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { canBuildBracket, draftChampion, emptyDraft, firstRoundMatches, groupIds, groupTeams } from "@/lib/bracket-engine";
 import { predictMatch, modelChampion } from "@/lib/prediction-model";
 import { squadCandidatesForTeamId } from "@/lib/squad-candidates";
-import { groupScoreDetails, knockoutScoreDetails, scoreBracket } from "@/lib/scoring";
+import { groupScoreDetails, knockoutScoreDetails, mergeCompletedResults, scoreBracket, type CompletedKnockoutResult } from "@/lib/scoring";
 import { createSupabaseBrowserClient } from "@/lib/supabase";
 import { amaanWinnerId, dataUpdatedIso, deadlineIso, fixtures, leaderboard, teams } from "@/lib/tournament-data";
 import type { BracketDraft, GroupId, LeaderboardEntry, Prediction, Team } from "@/lib/types";
@@ -42,6 +42,11 @@ type LeaderboardRow = {
   submitted_at: string;
   private_pool_code?: string | null;
   leaderboard_scores?: { points: number; rank: number | null } | Array<{ points: number; rank: number | null }> | null;
+};
+type MatchResultRow = {
+  match_id: string;
+  winner_team_id: string;
+  stage: CompletedKnockoutResult["stage"];
 };
 
 const teamById = new Map(teams.map((team) => [team.id, team]));
@@ -1279,6 +1284,7 @@ function Leaderboard({ localEntry }: { localEntry: LeaderboardEntry | null }) {
   const [remoteEntries, setRemoteEntries] = useState<ViewableLeaderboardEntry[] | null>(null);
   const [privateEntries, setPrivateEntries] = useState<ViewableLeaderboardEntry[] | null>(null);
   const [selectedEntry, setSelectedEntry] = useState<ViewableLeaderboardEntry | null>(null);
+  const [matchResults, setMatchResults] = useState<CompletedKnockoutResult[]>([]);
   const [viewerCanOpenBrackets, setViewerCanOpenBrackets] = useState(false);
   const [personalDisplayName, setPersonalDisplayName] = useState("");
   const [personalChampionPick] = useState(() => {
@@ -1418,6 +1424,19 @@ function Leaderboard({ localEntry }: { localEntry: LeaderboardEntry | null }) {
       }
       if (!data?.length) return;
       setRemoteEntries(mapRowsToEntries(data, canOpenBrackets));
+      const { data: resultRows } = await supabase
+        .from("match_results")
+        .select("match_id, winner_team_id, stage")
+        .eq("status", "completed");
+      if (resultRows?.length) {
+        setMatchResults(
+          mergeCompletedResults((resultRows as MatchResultRow[]).map((row) => ({
+            matchId: row.match_id,
+            winnerTeamId: row.winner_team_id,
+            stage: row.stage,
+          }))),
+        );
+      }
       if (!canOpenBrackets) {
         setStatus("Submit your own official bracket to unlock public bracket previews.");
       }
@@ -1431,7 +1450,7 @@ function Leaderboard({ localEntry }: { localEntry: LeaderboardEntry | null }) {
   }, [loadPrivatePool]);
 
   if (selectedEntry?.picks) {
-    return <BracketPreviewPage entry={selectedEntry} onBack={() => setSelectedEntry(null)} />;
+    return <BracketPreviewPage entry={selectedEntry} matchResults={matchResults} onBack={() => setSelectedEntry(null)} />;
   }
 
   return (
@@ -1558,13 +1577,14 @@ function Leaderboard({ localEntry }: { localEntry: LeaderboardEntry | null }) {
   );
 }
 
-function BracketPreviewPage({ entry, onBack }: { entry: ViewableLeaderboardEntry; onBack: () => void }) {
+function BracketPreviewPage({ entry, matchResults, onBack }: { entry: ViewableLeaderboardEntry; matchResults: CompletedKnockoutResult[]; onBack: () => void }) {
   const picks = entry.picks ? normalizedKnockoutDraft(entry.picks) : null;
   if (!picks) return null;
+  const scoringResults = matchResults.length ? matchResults : undefined;
   const champion = draftChampion(picks);
-  const score = scoreBracket(picks);
+  const score = scoreBracket(picks, scoringResults);
   const groupDetails = groupScoreDetails(picks);
-  const knockoutDetails = knockoutScoreDetails(picks);
+  const knockoutDetails = knockoutScoreDetails(picks, scoringResults);
   const teamFromPick = (matchId: string) => teamById.get(picks.knockoutPicks[matchId]);
   const r32Matches = firstRoundMatches(picks, teams);
   const allKnockoutMatches = [
