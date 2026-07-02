@@ -99,13 +99,33 @@ export function groupScoreDetails(draft: BracketDraft) {
 }
 
 export function knockoutScoreDetails(draft: BracketDraft, results = completedKnockoutResults) {
+  const winnersByStage = results.reduce(
+    (acc, result) => {
+      const stageWinners = acc[result.stage] ?? new Set<string>();
+      stageWinners.add(canonicalTeamId(result.winnerTeamId));
+      acc[result.stage] = stageWinners;
+      return acc;
+    },
+    {} as Partial<Record<CompletedKnockoutResult["stage"], Set<string>>>,
+  );
+  const creditedByStage = {} as Partial<Record<CompletedKnockoutResult["stage"], Set<string>>>;
+
   return results.map((result) => {
     const pickedTeamId = canonicalTeamId(draft.knockoutPicks[result.matchId] ?? "");
-    const points = pickedTeamId === result.winnerTeamId ? stagePoints[result.stage] : 0;
+    const advancedInRound = Boolean(pickedTeamId && winnersByStage[result.stage]?.has(pickedTeamId));
+    const alreadyCredited = Boolean(pickedTeamId && creditedByStage[result.stage]?.has(pickedTeamId));
+    const points = advancedInRound && !alreadyCredited ? stagePoints[result.stage] : 0;
+
+    if (points > 0) {
+      const creditedTeams = creditedByStage[result.stage] ?? new Set<string>();
+      creditedTeams.add(pickedTeamId);
+      creditedByStage[result.stage] = creditedTeams;
+    }
 
     return {
       ...result,
       pickedTeamId,
+      advancedInRound,
       points,
       possiblePoints: stagePoints[result.stage],
     };

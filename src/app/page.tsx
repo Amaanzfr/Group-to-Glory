@@ -1721,7 +1721,10 @@ function BracketPreviewPage({ entry, matchResults, onBack }: { entry: ViewableLe
                       <TeamLabel team={match?.home} /> <span className="px-1">vs</span> <TeamLabel team={match?.away} />
                     </p>
                     <p className="mt-2 text-sm font-bold">Pick: <TeamLabel team={teamById.get(detail.pickedTeamId ?? "")} /></p>
-                    <p className="mt-1 text-xs font-bold text-stone-500">Winner: {teamById.get(detail.winnerTeamId)?.name ?? detail.winnerTeamId}</p>
+                    <p className="mt-1 text-xs font-bold text-stone-500">Official winner: {teamById.get(detail.winnerTeamId)?.name ?? detail.winnerTeamId}</p>
+                    {detail.advancedInRound && detail.pickedTeamId !== detail.winnerTeamId ? (
+                      <p className="mt-1 text-xs font-black text-emerald-700">Credit: picked team advanced in this round</p>
+                    ) : null}
                   </div>
                 );
               })}
