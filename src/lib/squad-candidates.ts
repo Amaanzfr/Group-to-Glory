@@ -1,3 +1,4 @@
+import { canonicalTeamId } from "./tournament-data";
 import type { Player, Team } from "./types";
 
 type Candidate = [string, Player["position"], number, number, number, number];
@@ -99,7 +100,7 @@ const candidates: Record<string, Candidate[]> = {
     ["Cristian Volpato", "FWD", 1, 58, 76, 62],
     ["Jackson Irvine", "MID", 11, 84, 76, 82],
   ],
-  "t-rkiye": [
+  turkiye: [
     ["Arda Guler", "FWD", 5, 78, 86, 82],
     ["Kenan Yildiz", "FWD", 2, 74, 84, 78],
     ["Kerem Akturkoglu", "FWD", 9, 76, 80, 80],
@@ -107,7 +108,7 @@ const candidates: Record<string, Candidate[]> = {
     ["Baris Alper Yilmaz", "FWD", 3, 70, 78, 74],
     ["Irfan Can Kahveci", "FWD", 5, 64, 76, 68],
   ],
-  "cura-ao": [
+  curacao: [
     ["Jurgen Locadia", "FWD", 5, 68, 74, 72],
     ["Tahith Chong", "FWD", 3, 72, 78, 76],
     ["Brandley Kuwas", "FWD", 6, 70, 74, 74],
@@ -382,8 +383,9 @@ const candidates: Record<string, Candidate[]> = {
 };
 
 export function squadCandidatesForTeamId(teamId: string): Player[] {
-  return (candidates[teamId] ?? []).map(([name, position, nationalGoals, expectedMinutes, clubForm, starterScore]) => ({
-    id: `squad-${teamId}-${name.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`,
+  const normalizedTeamId = canonicalTeamId(teamId);
+  return (candidates[normalizedTeamId] ?? []).map(([name, position, nationalGoals, expectedMinutes, clubForm, starterScore]) => ({
+    id: `squad-${normalizedTeamId}-${canonicalTeamId(name)}`,
     name,
     position,
     nationalGoals,

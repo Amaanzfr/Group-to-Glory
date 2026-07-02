@@ -1,4 +1,5 @@
 import { scoringWeights } from "./bracket-engine";
+import { canonicalTeamId } from "./tournament-data";
 import type { BracketDraft, GroupId } from "./types";
 
 export type CompletedKnockoutResult = {
@@ -67,17 +68,19 @@ const groupSlots = ["first", "second", "third", "fourth"] as const;
 export function groupScoreDetails(draft: BracketDraft) {
   return (Object.entries(finalGroupStandings) as Array<[GroupId, [string, string, string, string]]>).map(([group, actualOrder]) => {
     const pick = draft.groupPicks[group];
-    const pickedOrder = groupSlots.map((slot) => pick?.[slot] ?? "");
+    const pickedOrder = groupSlots.map((slot) => canonicalTeamId(pick?.[slot] ?? ""));
     const perfect = pickedOrder.every((teamId, index) => teamId === actualOrder[index]);
-    const pickedTopTwo = new Set([pick?.first, pick?.second].filter(Boolean));
+    const pickedTopTwo = new Set([pick?.first, pick?.second].flatMap((teamId) => (teamId ? [canonicalTeamId(teamId)] : [])));
     const actualTopTwo = new Set(actualOrder.slice(0, 2));
     const topTwoCorrect = pickedTopTwo.size === 2 && [...actualTopTwo].every((teamId) => pickedTopTwo.has(teamId));
     const actualThird = actualOrder[2];
-    const firstPlaceCorrect = pick?.first === actualOrder[0];
+    const pickedThird = canonicalTeamId(pick?.third ?? "");
+    const advancingThirdIds = new Set(draft.thirdPlaceAdvancers.map((teamId) => canonicalTeamId(teamId)));
+    const firstPlaceCorrect = canonicalTeamId(pick?.first ?? "") === actualOrder[0];
     const thirdAdvancerCorrect =
-      pick?.third === actualThird &&
+      pickedThird === actualThird &&
       advancingThirdPlaceTeamIds.has(actualThird) &&
-      draft.thirdPlaceAdvancers.includes(actualThird);
+      advancingThirdIds.has(actualThird);
     const placementPoints = perfect ? 4 : topTwoCorrect ? 2 : firstPlaceCorrect ? 1 : 0;
     const points = placementPoints + (thirdAdvancerCorrect ? 1 : 0);
 
@@ -97,7 +100,7 @@ export function groupScoreDetails(draft: BracketDraft) {
 
 export function knockoutScoreDetails(draft: BracketDraft, results = completedKnockoutResults) {
   return results.map((result) => {
-    const pickedTeamId = draft.knockoutPicks[result.matchId];
+    const pickedTeamId = canonicalTeamId(draft.knockoutPicks[result.matchId] ?? "");
     const points = pickedTeamId === result.winnerTeamId ? stagePoints[result.stage] : 0;
 
     return {

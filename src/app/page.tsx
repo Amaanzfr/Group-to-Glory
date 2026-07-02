@@ -19,7 +19,7 @@ import { predictMatch, modelChampion } from "@/lib/prediction-model";
 import { squadCandidatesForTeamId } from "@/lib/squad-candidates";
 import { groupScoreDetails, knockoutScoreDetails, mergeCompletedResults, scoreBracket, type CompletedKnockoutResult } from "@/lib/scoring";
 import { createSupabaseBrowserClient } from "@/lib/supabase";
-import { amaanWinnerId, dataUpdatedIso, deadlineIso, fixtures, leaderboard, teams } from "@/lib/tournament-data";
+import { amaanWinnerId, canonicalTeamId, dataUpdatedIso, deadlineIso, fixtures, leaderboard, teams } from "@/lib/tournament-data";
 import type { BracketDraft, GroupId, LeaderboardEntry, Prediction, Team } from "@/lib/types";
 
 const tabs = [
@@ -105,6 +105,33 @@ const knockoutOrder = [
   "m104",
 ];
 
+function normalizeDraftTeamIds(draft: BracketDraft): BracketDraft {
+  const groupPicks = Object.fromEntries(
+    groupIds.map((group) => {
+      const pick = draft.groupPicks[group];
+      return [
+        group,
+        {
+          group,
+          first: pick?.first ? canonicalTeamId(pick.first) : undefined,
+          second: pick?.second ? canonicalTeamId(pick.second) : undefined,
+          third: pick?.third ? canonicalTeamId(pick.third) : undefined,
+          fourth: pick?.fourth ? canonicalTeamId(pick.fourth) : undefined,
+        },
+      ];
+    }),
+  ) as BracketDraft["groupPicks"];
+
+  return {
+    ...draft,
+    groupPicks,
+    thirdPlaceAdvancers: draft.thirdPlaceAdvancers.map((teamId) => canonicalTeamId(teamId)),
+    knockoutPicks: Object.fromEntries(
+      Object.entries(draft.knockoutPicks).map(([matchId, teamId]) => [matchId, canonicalTeamId(teamId)]),
+    ),
+  };
+}
+
 function normalizePoolCode(value: string) {
   return value.trim().toLowerCase();
 }
@@ -125,11 +152,12 @@ function validTeamIdsForMatch(matchId: string, picks: Record<string, string>, fi
 }
 
 function normalizedKnockoutDraft(draft: BracketDraft) {
-  const firstRoundIds = firstRoundTeamIds(draft);
+  const normalizedDraft = normalizeDraftTeamIds(draft);
+  const firstRoundIds = firstRoundTeamIds(normalizedDraft);
   const knockoutPicks: Record<string, string> = {};
 
   for (const matchId of knockoutOrder) {
-    const pick = draft.knockoutPicks[matchId];
+    const pick = normalizedDraft.knockoutPicks[matchId];
     if (!pick) continue;
     const validTeamIds = validTeamIdsForMatch(matchId, knockoutPicks, firstRoundIds);
     if (validTeamIds.includes(pick)) {
@@ -143,9 +171,9 @@ function normalizedKnockoutDraft(draft: BracketDraft) {
     finalistIds.some((teamId) => squadCandidatesForTeamId(teamId).some((player) => player.id === draft.finalScorer));
 
   return {
-    ...draft,
+    ...normalizedDraft,
     knockoutPicks,
-    finalScorer: finalScorerValid ? draft.finalScorer : undefined,
+    finalScorer: finalScorerValid ? normalizedDraft.finalScorer : undefined,
   };
 }
 

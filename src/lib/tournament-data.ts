@@ -73,14 +73,31 @@ const meta: Record<string, Omit<Team, "id" | "group" | "players">> = {
 const starNames: Record<string, Array<[string, "GK" | "DEF" | "MID" | "FWD", number, number, number, number]>> = {
 };
 
+export function canonicalTeamId(value: string) {
+  const normalized = value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "");
+
+  const aliases: Record<string, string> = {
+    "cura-ao": "curacao",
+    "cura-o": "curacao",
+    "t-rkiye": "turkiye",
+  };
+
+  return aliases[normalized] ?? normalized;
+}
+
 export const teams: Team[] = Object.entries(groups).flatMap(([group, names]) =>
   names.map((name) => ({
-    id: name.toLowerCase().replace(/[^a-z0-9]+/g, "-"),
+    id: canonicalTeamId(name),
     group: group as GroupId,
     ...meta[name],
     players:
       starNames[name]?.map(([playerName, position, nationalGoals, expectedMinutes, clubForm, starterScore]) => ({
-        id: `${name}-${playerName}`.toLowerCase().replace(/[^a-z0-9]+/g, "-"),
+        id: canonicalTeamId(`${name}-${playerName}`),
         name: playerName,
         position,
         nationalGoals,
@@ -91,7 +108,7 @@ export const teams: Team[] = Object.entries(groups).flatMap(([group, names]) =>
   })),
 );
 
-const slug = (name: string) => name.toLowerCase().replace(/[^a-z0-9]+/g, "-");
+const slug = canonicalTeamId;
 
 const groupFixture = (id: string, date: string, group: GroupId, home: string, away: string, venue: string): Fixture => ({
   id,
