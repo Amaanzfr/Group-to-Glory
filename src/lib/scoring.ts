@@ -27,6 +27,16 @@ export const completedKnockoutResults: CompletedKnockoutResult[] = [
   { matchId: "m80", winnerTeamId: "england", stage: "roundOf32" },
   { matchId: "m81", winnerTeamId: "usa", stage: "roundOf32" },
   { matchId: "m82", winnerTeamId: "belgium", stage: "roundOf32" },
+  { matchId: "m83", winnerTeamId: "portugal", stage: "roundOf32" },
+  { matchId: "m84", winnerTeamId: "spain", stage: "roundOf32" },
+  { matchId: "m85", winnerTeamId: "switzerland", stage: "roundOf32" },
+  { matchId: "m86", winnerTeamId: "argentina", stage: "roundOf32" },
+  { matchId: "m87", winnerTeamId: "colombia", stage: "roundOf32" },
+  { matchId: "m88", winnerTeamId: "egypt", stage: "roundOf32" },
+  { matchId: "m89", winnerTeamId: "france", stage: "roundOf16" },
+  { matchId: "m90", winnerTeamId: "morocco", stage: "roundOf16" },
+  { matchId: "m91", winnerTeamId: "norway", stage: "roundOf16" },
+  { matchId: "m92", winnerTeamId: "england", stage: "roundOf16" },
 ];
 
 export function mergeCompletedResults(extraResults: CompletedKnockoutResult[]) {
