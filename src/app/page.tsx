@@ -13,7 +13,7 @@ import {
   Trophy,
   Users,
 } from "lucide-react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { canBuildBracket, draftChampion, emptyDraft, firstRoundMatches, groupIds, groupTeams } from "@/lib/bracket-engine";
 import { predictMatch, modelChampion } from "@/lib/prediction-model";
 import { squadCandidatesForTeamId } from "@/lib/squad-candidates";
@@ -519,9 +519,9 @@ function BracketPool({ onSubmitted }: { onSubmitted: (entry: LeaderboardEntry) =
   const bracketRef = useRef<HTMLDivElement>(null);
   const championId = draftChampion(draft);
   const champion = championId ? teamById.get(championId) : undefined;
-  const r32 = firstRoundMatches(draft, teams);
-  const finalistIds = ["m101", "m102"].map((matchId) => draft.knockoutPicks[matchId]).filter(Boolean);
-  const finalistScorers = finalistIds.flatMap((teamId) => squadCandidatesForTeamId(teamId));
+  const r32 = useMemo(() => firstRoundMatches(draft, teams), [draft]);
+  const finalistIds = useMemo(() => ["m101", "m102"].map((matchId) => draft.knockoutPicks[matchId]).filter(Boolean), [draft.knockoutPicks]);
+  const finalistScorers = useMemo(() => finalistIds.flatMap((teamId) => squadCandidatesForTeamId(teamId)), [finalistIds]);
   const isAdmin = userLabel.toLowerCase() === adminEmail;
   const locked = submitted && !correctionMode;
   const googleAuthUrl =
@@ -533,7 +533,10 @@ function BracketPool({ onSubmitted }: { onSubmitted: (entry: LeaderboardEntry) =
       : "";
 
   useEffect(() => {
-    window.localStorage.setItem(draftStorageKey, JSON.stringify(draft));
+    const saveTimer = window.setTimeout(() => {
+      window.localStorage.setItem(draftStorageKey, JSON.stringify(draft));
+    }, 150);
+    return () => window.clearTimeout(saveTimer);
   }, [draft]);
 
   useEffect(() => {
@@ -1606,33 +1609,37 @@ function Leaderboard({ localEntry }: { localEntry: LeaderboardEntry | null }) {
 }
 
 function BracketPreviewPage({ entry, matchResults, onBack }: { entry: ViewableLeaderboardEntry; matchResults: CompletedKnockoutResult[]; onBack: () => void }) {
-  const picks = entry.picks ? normalizedKnockoutDraft(entry.picks) : null;
-  if (!picks) return null;
-  const scoringResults = matchResults.length ? matchResults : undefined;
+  const picks = useMemo(() => (entry.picks ? normalizedKnockoutDraft(entry.picks) : null), [entry.picks]);
+  const scoringResults = useMemo(() => (matchResults.length ? matchResults : undefined), [matchResults]);
+  const score = useMemo(() => (picks ? scoreBracket(picks, scoringResults) : null), [picks, scoringResults]);
+  const groupDetails = useMemo(() => (picks ? groupScoreDetails(picks) : []), [picks]);
+  const knockoutDetails = useMemo(() => (picks ? knockoutScoreDetails(picks, scoringResults) : []), [picks, scoringResults]);
+  const allKnockoutMatches = useMemo(() => {
+    if (!picks) return [];
+    const teamFromPick = (matchId: string) => teamById.get(picks.knockoutPicks[matchId]);
+    const r32Matches = firstRoundMatches(picks, teams);
+    return [
+      ...r32Matches,
+      { id: "m89", label: "Match 89", date: "Sat 4 Jul", venue: "Philadelphia Stadium", home: teamFromPick("m74"), away: teamFromPick("m77") },
+      { id: "m90", label: "Match 90", date: "Sat 4 Jul", venue: "Houston Stadium", home: teamFromPick("m73"), away: teamFromPick("m75") },
+      { id: "m91", label: "Match 91", date: "Sun 5 Jul", venue: "New York New Jersey Stadium", home: teamFromPick("m76"), away: teamFromPick("m78") },
+      { id: "m92", label: "Match 92", date: "Sun 5 Jul", venue: "Mexico City Stadium", home: teamFromPick("m79"), away: teamFromPick("m80") },
+      { id: "m93", label: "Match 93", date: "Mon 6 Jul", venue: "Dallas Stadium", home: teamFromPick("m83"), away: teamFromPick("m84") },
+      { id: "m94", label: "Match 94", date: "Mon 6 Jul", venue: "Seattle Stadium", home: teamFromPick("m81"), away: teamFromPick("m82") },
+      { id: "m95", label: "Match 95", date: "Tue 7 Jul", venue: "Atlanta Stadium", home: teamFromPick("m86"), away: teamFromPick("m88") },
+      { id: "m96", label: "Match 96", date: "Tue 7 Jul", venue: "BC Place Vancouver", home: teamFromPick("m85"), away: teamFromPick("m87") },
+      { id: "m97", label: "Match 97", date: "Thu 9 Jul", venue: "Boston Stadium", home: teamFromPick("m89"), away: teamFromPick("m90") },
+      { id: "m98", label: "Match 98", date: "Fri 10 Jul", venue: "Los Angeles Stadium", home: teamFromPick("m93"), away: teamFromPick("m94") },
+      { id: "m99", label: "Match 99", date: "Sat 11 Jul", venue: "Miami Stadium", home: teamFromPick("m91"), away: teamFromPick("m92") },
+      { id: "m100", label: "Match 100", date: "Sat 11 Jul", venue: "Kansas City Stadium", home: teamFromPick("m95"), away: teamFromPick("m96") },
+      { id: "m101", label: "Match 101", date: "Tue 14 Jul", venue: "Dallas Stadium", home: teamFromPick("m97"), away: teamFromPick("m98") },
+      { id: "m102", label: "Match 102", date: "Wed 15 Jul", venue: "Atlanta Stadium", home: teamFromPick("m99"), away: teamFromPick("m100") },
+      { id: "m104", label: "Match 104", date: "Sun 19 Jul", venue: "New York New Jersey Stadium", home: teamFromPick("m101"), away: teamFromPick("m102") },
+    ];
+  }, [picks]);
+
+  if (!picks || !score) return null;
   const champion = draftChampion(picks);
-  const score = scoreBracket(picks, scoringResults);
-  const groupDetails = groupScoreDetails(picks);
-  const knockoutDetails = knockoutScoreDetails(picks, scoringResults);
-  const teamFromPick = (matchId: string) => teamById.get(picks.knockoutPicks[matchId]);
-  const r32Matches = firstRoundMatches(picks, teams);
-  const allKnockoutMatches = [
-    ...r32Matches,
-    { id: "m89", label: "Match 89", date: "Sat 4 Jul", venue: "Philadelphia Stadium", home: teamFromPick("m74"), away: teamFromPick("m77") },
-    { id: "m90", label: "Match 90", date: "Sat 4 Jul", venue: "Houston Stadium", home: teamFromPick("m73"), away: teamFromPick("m75") },
-    { id: "m91", label: "Match 91", date: "Sun 5 Jul", venue: "New York New Jersey Stadium", home: teamFromPick("m76"), away: teamFromPick("m78") },
-    { id: "m92", label: "Match 92", date: "Sun 5 Jul", venue: "Mexico City Stadium", home: teamFromPick("m79"), away: teamFromPick("m80") },
-    { id: "m93", label: "Match 93", date: "Mon 6 Jul", venue: "Dallas Stadium", home: teamFromPick("m83"), away: teamFromPick("m84") },
-    { id: "m94", label: "Match 94", date: "Mon 6 Jul", venue: "Seattle Stadium", home: teamFromPick("m81"), away: teamFromPick("m82") },
-    { id: "m95", label: "Match 95", date: "Tue 7 Jul", venue: "Atlanta Stadium", home: teamFromPick("m86"), away: teamFromPick("m88") },
-    { id: "m96", label: "Match 96", date: "Tue 7 Jul", venue: "BC Place Vancouver", home: teamFromPick("m85"), away: teamFromPick("m87") },
-    { id: "m97", label: "Match 97", date: "Thu 9 Jul", venue: "Boston Stadium", home: teamFromPick("m89"), away: teamFromPick("m90") },
-    { id: "m98", label: "Match 98", date: "Fri 10 Jul", venue: "Los Angeles Stadium", home: teamFromPick("m93"), away: teamFromPick("m94") },
-    { id: "m99", label: "Match 99", date: "Sat 11 Jul", venue: "Miami Stadium", home: teamFromPick("m91"), away: teamFromPick("m92") },
-    { id: "m100", label: "Match 100", date: "Sat 11 Jul", venue: "Kansas City Stadium", home: teamFromPick("m95"), away: teamFromPick("m96") },
-    { id: "m101", label: "Match 101", date: "Tue 14 Jul", venue: "Dallas Stadium", home: teamFromPick("m97"), away: teamFromPick("m98") },
-    { id: "m102", label: "Match 102", date: "Wed 15 Jul", venue: "Atlanta Stadium", home: teamFromPick("m99"), away: teamFromPick("m100") },
-    { id: "m104", label: "Match 104", date: "Sun 19 Jul", venue: "New York New Jersey Stadium", home: teamFromPick("m101"), away: teamFromPick("m102") },
-  ];
   const completedMatchIds = new Set(knockoutDetails.map((detail) => detail.matchId));
   const futureKnockoutPicks = allKnockoutMatches.filter((match) => picks.knockoutPicks[match.id] && !completedMatchIds.has(match.id));
 
