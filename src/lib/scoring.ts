@@ -39,6 +39,8 @@ export const completedKnockoutResults: CompletedKnockoutResult[] = [
   { matchId: "m92", winnerTeamId: "england", stage: "roundOf16" },
   { matchId: "m93", winnerTeamId: "spain", stage: "roundOf16" },
   { matchId: "m94", winnerTeamId: "belgium", stage: "roundOf16" },
+  { matchId: "m95", winnerTeamId: "argentina", stage: "roundOf16" },
+  { matchId: "m96", winnerTeamId: "switzerland", stage: "roundOf16" },
 ];
 
 export function mergeCompletedResults(extraResults: CompletedKnockoutResult[]) {
